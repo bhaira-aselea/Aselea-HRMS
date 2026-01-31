@@ -4,7 +4,11 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   Clock,
   Calendar as CalendarIcon,
@@ -18,16 +22,29 @@ import {
   XCircle,
   AlertCircle,
   CircleDot,
+  Send,
 } from 'lucide-react';
 
 // Mock attendance data for logged-in employee
 interface DailyAttendance {
   date: string;
   status: 'present' | 'absent' | 'late' | 'leave' | null;
-  checkIn: string | null;
-  checkOut: string | null;
+  punchIn: string | null;
+  punchOut: string | null;
   duration: string | null;
   remarks: string | null;
+}
+
+interface AttendanceEditRequest {
+  id: string;
+  date: string;
+  originalPunchIn: string | null;
+  originalPunchOut: string | null;
+  requestedPunchIn: string;
+  requestedPunchOut: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
 }
 
 const generateMonthAttendance = (year: number, month: number): DailyAttendance[] => {
@@ -45,8 +62,8 @@ const generateMonthAttendance = (year: number, month: number): DailyAttendance[]
         attendance.push({
           date: dateStr,
           status: 'absent',
-          checkIn: null,
-          checkOut: null,
+          punchIn: null,
+          punchOut: null,
           duration: null,
           remarks: null,
         });
@@ -54,8 +71,8 @@ const generateMonthAttendance = (year: number, month: number): DailyAttendance[]
         attendance.push({
           date: dateStr,
           status: 'leave',
-          checkIn: null,
-          checkOut: null,
+          punchIn: null,
+          punchOut: null,
           duration: null,
           remarks: 'Sick Leave',
         });
@@ -63,8 +80,8 @@ const generateMonthAttendance = (year: number, month: number): DailyAttendance[]
         attendance.push({
           date: dateStr,
           status: 'late',
-          checkIn: '10:15 AM',
-          checkOut: '06:30 PM',
+          punchIn: '10:15 AM',
+          punchOut: '06:30 PM',
           duration: '08:15',
           remarks: 'Traffic delay',
         });
@@ -72,8 +89,8 @@ const generateMonthAttendance = (year: number, month: number): DailyAttendance[]
         attendance.push({
           date: dateStr,
           status: 'present',
-          checkIn: '09:00 AM',
-          checkOut: '06:00 PM',
+          punchIn: '09:00 AM',
+          punchOut: '06:00 PM',
           duration: '09:00',
           remarks: null,
         });
@@ -82,8 +99,8 @@ const generateMonthAttendance = (year: number, month: number): DailyAttendance[]
       attendance.push({
         date: dateStr,
         status: 'present',
-        checkIn: '09:00 AM',
-        checkOut: null,
+        punchIn: '09:00 AM',
+        punchOut: null,
         duration: null,
         remarks: null,
       });
@@ -91,8 +108,8 @@ const generateMonthAttendance = (year: number, month: number): DailyAttendance[]
       attendance.push({
         date: dateStr,
         status: null,
-        checkIn: null,
-        checkOut: null,
+        punchIn: null,
+        punchOut: null,
         duration: null,
         remarks: null,
       });
@@ -107,7 +124,14 @@ const EmployeeAttendance = () => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const [checkedIn, setCheckedIn] = useState(true); // Mock: Employee already checked in today
+  const [punchedIn, setPunchedIn] = useState(true); // Mock: Employee already punched in today
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<DailyAttendance | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    punchIn: '',
+    punchOut: '',
+    reason: '',
+  });
   
   const monthAttendance = generateMonthAttendance(selectedYear, selectedMonth);
   
@@ -203,6 +227,35 @@ const EmployeeAttendance = () => {
            date.getMonth() === today.getMonth() && 
            date.getFullYear() === today.getFullYear();
   };
+
+  const openEditDialog = (record: DailyAttendance) => {
+    setSelectedRecord(record);
+    setEditFormData({
+      punchIn: record.punchIn || '',
+      punchOut: record.punchOut || '',
+      reason: '',
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSubmitEditRequest = () => {
+    // Here you would send the edit request to the backend
+    console.log('Submitting edit request:', {
+      date: selectedRecord?.date,
+      originalPunchIn: selectedRecord?.punchIn,
+      originalPunchOut: selectedRecord?.punchOut,
+      requestedPunchIn: editFormData.punchIn,
+      requestedPunchOut: editFormData.punchOut,
+      reason: editFormData.reason,
+    });
+    
+    // Show success message
+    alert('Attendance edit request submitted successfully! HR will review your request.');
+    
+    setIsEditDialogOpen(false);
+    setSelectedRecord(null);
+    setEditFormData({ punchIn: '', punchOut: '', reason: '' });
+  };
   
   return (
     <DashboardLayout>
@@ -213,9 +266,9 @@ const EmployeeAttendance = () => {
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                  checkedIn ? 'bg-success/20' : 'bg-destructive/20'
+                  punchedIn ? 'bg-success/20' : 'bg-destructive/20'
                 }`}>
-                  {checkedIn ? (
+                  {punchedIn ? (
                     <CheckCircle className="h-8 w-8 text-success" />
                   ) : (
                     <Clock className="h-8 w-8 text-destructive" />
@@ -223,28 +276,28 @@ const EmployeeAttendance = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    {checkedIn ? 'Checked In' : 'Not Checked In'}
+                    {punchedIn ? 'Punched In' : 'Not Punched In'}
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {checkedIn ? 'Check in time: 09:00 AM • Today' : 'Mark your attendance for today'}
+                    {punchedIn ? 'Punch in time: 09:00 AM • Today' : 'Mark your attendance for today'}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <Button 
-                  className={checkedIn ? 'bg-destructive hover:bg-destructive/90' : 'glow-button'}
+                  className={punchedIn ? 'bg-destructive hover:bg-destructive/90' : 'glow-button'}
                   size="lg"
-                  onClick={() => setCheckedIn(!checkedIn)}
+                  onClick={() => setPunchedIn(!punchedIn)}
                 >
-                  {checkedIn ? (
+                  {punchedIn ? (
                     <>
                       <LogOut className="h-4 w-4 mr-2" />
-                      Check Out
+                      Punch Out
                     </>
                   ) : (
                     <>
                       <LogIn className="h-4 w-4 mr-2" />
-                      Check In
+                      Punch In
                     </>
                   )}
                 </Button>
@@ -428,8 +481,8 @@ const EmployeeAttendance = () => {
                     <tr className="bg-secondary/50 border-b border-border">
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Date</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Status</th>
-                      <th className="text-left p-4 text-sm font-semibold text-foreground">Check In</th>
-                      <th className="text-left p-4 text-sm font-semibold text-foreground">Check Out</th>
+                      <th className="text-left p-4 text-sm font-semibold text-foreground">Punch In</th>
+                      <th className="text-left p-4 text-sm font-semibold text-foreground">Punch Out</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Duration</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Remarks</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Action</th>
@@ -449,15 +502,15 @@ const EmployeeAttendance = () => {
                           <td className="p-4 text-sm text-muted-foreground">{formattedDate}</td>
                           <td className="p-4">{getStatusBadge(record.status)}</td>
                           <td className="p-4 text-sm">
-                            {record.checkIn ? (
-                              <span className="text-foreground font-medium">{record.checkIn}</span>
+                            {record.punchIn ? (
+                              <span className="text-foreground font-medium">{record.punchIn}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </td>
                           <td className="p-4 text-sm">
-                            {record.checkOut ? (
-                              <span className="text-foreground font-medium">{record.checkOut}</span>
+                            {record.punchOut ? (
+                              <span className="text-foreground font-medium">{record.punchOut}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
@@ -469,9 +522,18 @@ const EmployeeAttendance = () => {
                             {record.remarks || '-'}
                           </td>
                           <td className="p-4">
-                            <Button variant="ghost" size="sm">
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
+                            {record.status === 'present' || record.status === 'late' ? (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => openEditDialog(record)}
+                                title="Request attendance edit"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -482,6 +544,90 @@ const EmployeeAttendance = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit Attendance Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="glass-card max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Request Attendance Edit</DialogTitle>
+              <DialogDescription>
+                Submit a request to edit your punch in/out times for{' '}
+                {selectedRecord && new Date(selectedRecord.date).toLocaleDateString('en-US', { 
+                  month: 'long', 
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {/* Original Times */}
+              <div className="bg-muted/30 p-4 rounded-lg space-y-2">
+                <p className="text-sm font-semibold text-foreground">Current Record:</p>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Punch In: </span>
+                    <span className="text-foreground font-medium">
+                      {selectedRecord?.punchIn || 'Not recorded'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Punch Out: </span>
+                    <span className="text-foreground font-medium">
+                      {selectedRecord?.punchOut || 'Not recorded'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Requested Times */}
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="punchIn">Corrected Punch In Time</Label>
+                  <Input
+                    id="punchIn"
+                    type="time"
+                    className="bg-secondary border-border"
+                    value={editFormData.punchIn}
+                    onChange={(e) => setEditFormData({ ...editFormData, punchIn: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="punchOut">Corrected Punch Out Time</Label>
+                  <Input
+                    id="punchOut"
+                    type="time"
+                    className="bg-secondary border-border"
+                    value={editFormData.punchOut}
+                    onChange={(e) => setEditFormData({ ...editFormData, punchOut: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reason">Reason for Edit Request <span className="text-destructive">*</span></Label>
+                  <Textarea
+                    id="reason"
+                    placeholder="Explain why you need to edit this attendance record (e.g., forgot to punch in/out, system error, etc.)"
+                    className="bg-secondary border-border min-h-[100px]"
+                    value={editFormData.reason}
+                    onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="glow-button"
+                onClick={handleSubmitEditRequest}
+                disabled={!editFormData.reason || !editFormData.punchIn || !editFormData.punchOut}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Submit Request
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

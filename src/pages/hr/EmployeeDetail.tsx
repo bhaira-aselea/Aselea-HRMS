@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   ArrowLeft,
   User,
@@ -20,6 +21,10 @@ import {
   MessageSquare,
   ClipboardList,
   Edit,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  FileEdit,
 } from 'lucide-react';
 
 // Section type for navigation
@@ -43,6 +48,30 @@ interface Employee {
   reportingTo?: string;
 }
 
+// Attendance interfaces
+interface DailyAttendance {
+  date: string;
+  status: 'present' | 'absent' | 'late' | 'leave';
+  punchIn: string | null;
+  punchOut: string | null;
+  duration: string | null;
+  remarks: string | null;
+}
+
+interface AttendanceEditRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  originalPunchIn: string | null;
+  originalPunchOut: string | null;
+  requestedPunchIn: string;
+  requestedPunchOut: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+}
+
 // Mock data - matches HREmployees.tsx
 const employees: Employee[] = [
   { id: '1', name: 'John Doe', email: 'john.doe@company.com', phone: '+1 (555) 123-4567', department: 'Engineering', position: 'Senior Developer', joinDate: '2022-03-15', status: 'active', employeeId: 'EMP-001', password: 'pass123', dateOfBirth: '1990-05-15', address: '123 Main St, City, State 12345' },
@@ -53,13 +82,66 @@ const employees: Employee[] = [
   { id: '6', name: 'Emily Davis', email: 'emily.d@company.com', phone: '+1 (555) 678-9012', department: 'Finance', position: 'Accountant', joinDate: '2022-11-20', status: 'active', employeeId: 'EMP-006', password: 'emily321', dateOfBirth: '1989-12-05', address: '987 Cedar Ln, City, State 67890' },
 ];
 
+// Mock attendance data
+const mockAttendance: Record<string, DailyAttendance[]> = {
+  '1': [
+    { date: '2026-01-29', status: 'present', punchIn: '09:00 AM', punchOut: '06:00 PM', duration: '09:00', remarks: null },
+    { date: '2026-01-28', status: 'present', punchIn: '09:00 AM', punchOut: '06:00 PM', duration: '09:00', remarks: null },
+    { date: '2026-01-27', status: 'present', punchIn: '09:00 AM', punchOut: '06:00 PM', duration: '09:00', remarks: null },
+    { date: '2026-01-26', status: 'present', punchIn: '09:00 AM', punchOut: '06:00 PM', duration: '09:00', remarks: null },
+    { date: '2026-01-25', status: 'present', punchIn: '09:00 AM', punchOut: '06:00 PM', duration: '09:00', remarks: null },
+    { date: '2026-01-24', status: 'absent', punchIn: null, punchOut: null, duration: null, remarks: null },
+  ],
+};
+
+// Mock edit requests
+const mockEditRequests: AttendanceEditRequest[] = [
+  {
+    id: '1',
+    employeeId: '1',
+    employeeName: 'John Doe',
+    date: '2026-01-27',
+    originalPunchIn: '09:00 AM',
+    originalPunchOut: '06:00 PM',
+    requestedPunchIn: '09:15 AM',
+    requestedPunchOut: '06:30 PM',
+    reason: 'Forgot to punch in on time due to system issue. Actually arrived at 9:15 AM and left at 6:30 PM.',
+    status: 'pending',
+    submittedAt: '2026-01-28T10:30:00',
+  },
+  {
+    id: '2',
+    employeeId: '1',
+    employeeName: 'John Doe',
+    date: '2026-01-25',
+    originalPunchIn: '09:00 AM',
+    originalPunchOut: null,
+    requestedPunchIn: '09:00 AM',
+    requestedPunchOut: '07:00 PM',
+    reason: 'Forgot to punch out. Was working late on urgent project.',
+    status: 'pending',
+    submittedAt: '2026-01-26T09:00:00',
+  },
+];
+
 const EmployeeDetail = () => {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<Section>('overview');
+  const [editRequests, setEditRequests] = useState<AttendanceEditRequest[]>(mockEditRequests);
+  const [selectedRequest, setSelectedRequest] = useState<AttendanceEditRequest | null>(null);
+  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
 
   // Find employee by ID
   const employee = employees.find(emp => emp.id === employeeId);
+  
+  // Get employee attendance
+  const employeeAttendance = mockAttendance[employeeId || ''] || [];
+  
+  // Get pending edit requests for this employee
+  const pendingRequests = editRequests.filter(
+    req => req.employeeId === employeeId && req.status === 'pending'
+  );
 
   // If employee not found, show error state
   if (!employee) {
@@ -101,6 +183,27 @@ const EmployeeDetail = () => {
   // Helper function for status display text
   const getStatusText = (status: string) => {
     return status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ');
+  };
+
+  const handleApproveRequest = (requestId: string) => {
+    setEditRequests(editRequests.map(req =>
+      req.id === requestId ? { ...req, status: 'approved' as const } : req
+    ));
+    alert('Attendance edit request approved! Employee attendance has been updated.');
+    setIsRequestDialogOpen(false);
+  };
+
+  const handleRejectRequest = (requestId: string) => {
+    setEditRequests(editRequests.map(req =>
+      req.id === requestId ? { ...req, status: 'rejected' as const } : req
+    ));
+    alert('Attendance edit request rejected. Original data will remain unchanged.');
+    setIsRequestDialogOpen(false);
+  };
+
+  const viewRequestDetails = (request: AttendanceEditRequest) => {
+    setSelectedRequest(request);
+    setIsRequestDialogOpen(true);
   };
 
   return (
@@ -182,6 +285,11 @@ const EmployeeDetail = () => {
                   >
                     <Clock className="h-4 w-4 mr-3" />
                     Attendance
+                    {pendingRequests.length > 0 && (
+                      <Badge className="ml-auto bg-destructive text-xs">
+                        {pendingRequests.length}
+                      </Badge>
+                    )}
                   </Button>
                   <Button
                     variant="ghost"
@@ -375,23 +483,165 @@ const EmployeeDetail = () => {
             )}
 
             {activeSection === 'attendance' && (
-              <Card className="glass-card">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-lg bg-primary/10">
-                      <Clock className="h-5 w-5 text-primary" />
+              <div className="space-y-6">
+                {/* Pending Edit Requests */}
+                {pendingRequests.length > 0 && (
+                  <Card className="glass-card border-warning/30">
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-lg bg-warning/10">
+                          <AlertTriangle className="h-5 w-5 text-warning" />
+                        </div>
+                        <div className="flex-1">
+                          <CardTitle className="text-xl">Pending Edit Requests</CardTitle>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {pendingRequests.length} attendance edit request{pendingRequests.length > 1 ? 's' : ''} awaiting your review
+                          </p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {pendingRequests.map((request) => (
+                          <Card key={request.id} className="glass-card border-warning/20">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <FileEdit className="h-4 w-4 text-warning" />
+                                    <span className="font-semibold text-foreground">
+                                      {new Date(request.date).toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                      })}
+                                    </span>
+                                    <Badge className="status-pending text-xs">Pending</Badge>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="text-muted-foreground">Original Punch In:</p>
+                                      <p className="font-medium text-foreground">{request.originalPunchIn || 'Not recorded'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Requested Punch In:</p>
+                                      <p className="font-medium text-success">{request.requestedPunchIn}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Original Punch Out:</p>
+                                      <p className="font-medium text-foreground">{request.originalPunchOut || 'Not recorded'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Requested Punch Out:</p>
+                                      <p className="font-medium text-success">{request.requestedPunchOut}</p>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground text-xs">Reason:</p>
+                                    <p className="text-sm text-foreground mt-1">{request.reason}</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  <Button
+                                    size="sm"
+                                    className="bg-success hover:bg-success/90"
+                                    onClick={() => handleApproveRequest(request.id)}
+                                  >
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-destructive hover:text-destructive border-destructive/30"
+                                    onClick={() => handleRejectRequest(request.id)}
+                                  >
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Reject
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Attendance Records */}
+                <Card className="glass-card">
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 rounded-lg bg-primary/10">
+                        <Clock className="h-5 w-5 text-primary" />
+                      </div>
+                      <CardTitle className="text-xl">Attendance Records</CardTitle>
                     </div>
-                    <CardTitle className="text-xl">Attendance Records</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-12 text-center">
-                  <Clock className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-xl font-semibold mb-2">Attendance Module</h3>
-                  <p className="text-muted-foreground">
-                    Attendance tracking and history for {employee.name} will be displayed here.
-                  </p>
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent>
+                    {employeeAttendance.length > 0 ? (
+                      <div className="rounded-lg border border-border overflow-hidden">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-secondary/50 border-b border-border">
+                              <th className="text-left p-4 text-sm font-semibold text-foreground">Date</th>
+                              <th className="text-left p-4 text-sm font-semibold text-foreground">Status</th>
+                              <th className="text-left p-4 text-sm font-semibold text-foreground">Punch In</th>
+                              <th className="text-left p-4 text-sm font-semibold text-foreground">Punch Out</th>
+                              <th className="text-left p-4 text-sm font-semibold text-foreground">Duration</th>
+                              <th className="text-left p-4 text-sm font-semibold text-foreground">Remarks</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {employeeAttendance.map((record) => (
+                              <tr key={record.date} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                                <td className="p-4 text-sm text-muted-foreground">
+                                  {new Date(record.date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </td>
+                                <td className="p-4">
+                                  <Badge className={
+                                    record.status === 'present' ? 'status-approved' :
+                                    record.status === 'late' ? 'status-pending' :
+                                    record.status === 'absent' ? 'status-rejected' :
+                                    'status-in-progress'
+                                  }>
+                                    {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                                  </Badge>
+                                </td>
+                                <td className="p-4 text-sm">
+                                  <span className="text-foreground font-medium">{record.punchIn || '-'}</span>
+                                </td>
+                                <td className="p-4 text-sm">
+                                  <span className="text-foreground font-medium">{record.punchOut || '-'}</span>
+                                </td>
+                                <td className="p-4 text-sm text-foreground font-medium">
+                                  {record.duration || '-'}
+                                </td>
+                                <td className="p-4 text-sm text-muted-foreground">
+                                  {record.remarks || '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-12 text-center">
+                        <Clock className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                        <h3 className="text-xl font-semibold mb-2">No Attendance Records</h3>
+                        <p className="text-muted-foreground">
+                          No attendance records found for {employee.name}.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {activeSection === 'tasks' && (
