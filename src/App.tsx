@@ -10,6 +10,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import HRDashboard from "./pages/hr/HRDashboard";
+import HREmployees from "./pages/hr/HREmployees";
+import HRProfile from "./pages/hr/HRProfile";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 import EmployeeProfile from "./pages/employee/EmployeeProfile";
 
@@ -48,6 +50,8 @@ const App = () => (
 
             {/* HR Routes - Protected */}
             <Route path="/hr" element={<ProtectedRoute allowedRole="hr"><HRDashboard /></ProtectedRoute>} />
+            <Route path="/hr/profile" element={<ProtectedRoute allowedRole="hr"><HRProfile /></ProtectedRoute>} />
+            <Route path="/hr/employees" element={<ProtectedRoute allowedRole="hr"><HREmployees /></ProtectedRoute>} />
             <Route path="/hr/chat" element={<ProtectedRoute allowedRole="hr"><ChatModule role="hr" /></ProtectedRoute>} />
             <Route path="/hr/attendance" element={<ProtectedRoute allowedRole="hr"><AttendanceModule role="hr" /></ProtectedRoute>} />
             <Route path="/hr/leaves" element={<ProtectedRoute allowedRole="hr"><LeaveModule role="hr" /></ProtectedRoute>} />

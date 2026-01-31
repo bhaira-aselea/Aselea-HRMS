@@ -24,6 +24,7 @@ import {
   LucideIcon,
   Menu,
   X,
+  User,
 } from 'lucide-react';
 import { useState } from 'react';
 import aseleaLogo from '@/assets/aselea-logo.png';
@@ -50,6 +51,7 @@ const adminNavItems: NavItem[] = [
 
 const hrNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/hr', icon: LayoutDashboard },
+  { title: 'My Profile', href: '/hr/profile', icon: User },
   { title: 'Employees', href: '/hr/employees', icon: UserCircle },
   { title: 'Attendance', href: '/hr/attendance', icon: Clock },
   { title: 'Leave Requests', href: '/hr/leaves', icon: CalendarCheck },
