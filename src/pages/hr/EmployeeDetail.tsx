@@ -34,6 +34,10 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
+// Import employee components for monitoring
+import EmployeeTasksContent from '@/components/modules/EmployeeTasksContent.tsx';
+import EmployeeChatContent from '@/components/modules/EmployeeChatContent.tsx';
+
 // Type definitions
 interface Employee {
   id: string;
@@ -909,31 +913,37 @@ const EmployeeDetail = () => {
             )}
 
             {activeSection === 'tasks' && (
-              <Card className="glass-card">
-                <CardContent className="p-12">
-                  <div className="text-center">
-                    <ClipboardList className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-xl font-semibold mb-2">Tasks Section</h3>
-                    <p className="text-muted-foreground">
-                      Employee tasks and assignments will be displayed here.
-                    </p>
+              <div className="space-y-4">
+                <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-warning">Employee Task Monitoring</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        You are viewing {employee.name}'s task dashboard for monitoring and oversight purposes.
+                      </p>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+                <EmployeeTasksContent employeeId={employeeId} employeeName={employee.name} />
+              </div>
             )}
 
             {activeSection === 'chat' && (
-              <Card className="glass-card">
-                <CardContent className="p-12">
-                  <div className="text-center">
-                    <MessageSquare className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-xl font-semibold mb-2">Chat Section</h3>
-                    <p className="text-muted-foreground">
-                      Direct messaging with {employee.name} will be available here.
-                    </p>
+              <div className="space-y-4">
+                <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-warning">Employee Chat Monitoring</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        You are viewing {employee.name}'s chat conversations for monitoring and oversight purposes.
+                      </p>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+                <EmployeeChatContent employeeId={employeeId} employeeName={employee.name} />
+              </div>
             )}
           </div>
         </div>
