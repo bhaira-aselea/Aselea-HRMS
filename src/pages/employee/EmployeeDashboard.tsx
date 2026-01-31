@@ -91,7 +91,7 @@ const EmployeeDashboard = () => {
               </div>
             </CardContent>
           </Card>
-
+/* Today's Status */
           {/* Today's Status */}
           <Card className="glass-card">
             <CardHeader className="pb-2">
