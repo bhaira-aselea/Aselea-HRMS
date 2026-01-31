@@ -15,6 +15,8 @@ import HRProfile from "./pages/hr/HRProfile";
 import EmployeeDetail from "./pages/hr/EmployeeDetail";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 import EmployeeProfile from "./pages/employee/EmployeeProfile";
+import EmployeeAttendance from "./pages/employee/EmployeeAttendance";
+import EmployeeTasks from "./pages/employee/EmployeeTasks";
 
 // Modules
 import ChatModule from "./components/modules/ChatModule";
@@ -66,10 +68,10 @@ const App = () => (
             <Route path="/employee" element={<ProtectedRoute allowedRole="employee"><EmployeeDashboard /></ProtectedRoute>} />
             <Route path="/employee/profile" element={<ProtectedRoute allowedRole="employee"><EmployeeProfile /></ProtectedRoute>} />
             <Route path="/employee/chat" element={<ProtectedRoute allowedRole="employee"><ChatModule role="employee" /></ProtectedRoute>} />
-            <Route path="/employee/attendance" element={<ProtectedRoute allowedRole="employee"><AttendanceModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/attendance" element={<ProtectedRoute allowedRole="employee"><EmployeeAttendance /></ProtectedRoute>} />
             <Route path="/employee/calendar" element={<ProtectedRoute allowedRole="employee"><CalendarModule role="employee" /></ProtectedRoute>} />
             <Route path="/employee/leave" element={<ProtectedRoute allowedRole="employee"><LeaveModule role="employee" /></ProtectedRoute>} />
-            <Route path="/employee/tasks" element={<ProtectedRoute allowedRole="employee"><TasksModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/tasks" element={<ProtectedRoute allowedRole="employee"><EmployeeTasks /></ProtectedRoute>} />
             <Route path="/employee/expenses" element={<ProtectedRoute allowedRole="employee"><ExpensesModule role="employee" /></ProtectedRoute>} />
             <Route path="/employee/announcements" element={<ProtectedRoute allowedRole="employee"><AnnouncementsModule role="employee" /></ProtectedRoute>} />
             <Route path="/employee/*" element={<ProtectedRoute allowedRole="employee"><EmployeeDashboard /></ProtectedRoute>} />

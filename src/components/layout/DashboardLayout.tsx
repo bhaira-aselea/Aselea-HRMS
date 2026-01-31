@@ -66,8 +66,6 @@ const employeeNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/employee', icon: LayoutDashboard },
   { title: 'My Profile', href: '/employee/profile', icon: UserCircle },
   { title: 'Attendance', href: '/employee/attendance', icon: Clock },
-  { title: 'Calendar', href: '/employee/calendar', icon: Calendar },
-  { title: 'Leave', href: '/employee/leave', icon: CalendarCheck },
   { title: 'Tasks', href: '/employee/tasks', icon: ClipboardList },
   { title: 'Expenses', href: '/employee/expenses', icon: Receipt },
   { title: 'Chat', href: '/employee/chat', icon: MessageSquare },
