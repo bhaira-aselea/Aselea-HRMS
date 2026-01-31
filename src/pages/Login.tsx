@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, Lock, User } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Eye, EyeOff, Lock, User, Shield, Users, UserCircle } from 'lucide-react';
 import aseleaLogo from '@/assets/aselea-logo.png';
 
 const Login = () => {
+  const [role, setRole] = useState<UserRole>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -20,18 +22,38 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!role) {
+      setError('Please select a role');
+      return;
+    }
+
     setIsLoading(true);
 
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const success = login(username, password);
+    const success = login(username, password, role);
     if (success) {
-      navigate('/select-role');
+      // Redirect based on selected role
+      navigate(`/${role}`);
     } else {
       setError('Invalid username or password');
     }
     setIsLoading(false);
+  };
+
+  const getRoleIcon = (roleName: string) => {
+    switch (roleName) {
+      case 'admin':
+        return Shield;
+      case 'hr':
+        return Users;
+      case 'employee':
+        return UserCircle;
+      default:
+        return UserCircle;
+    }
   };
 
   return (
@@ -62,6 +84,37 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
+              <Label htmlFor="role" className="text-sm font-medium">
+                Select Role <span className="text-destructive">*</span>
+              </Label>
+              <Select value={role || ''} onValueChange={(value) => setRole(value as UserRole)}>
+                <SelectTrigger className="bg-secondary border-border focus:border-primary">
+                  <SelectValue placeholder="Choose your role..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-primary" />
+                      <span>Admin</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="hr">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      <span>HR Manager</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="employee">
+                    <div className="flex items-center gap-2">
+                      <UserCircle className="h-4 w-4 text-primary" />
+                      <span>Employee</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium">
                 Username
               </Label>
@@ -75,6 +128,7 @@ const Login = () => {
                   onChange={(e) => setUsername(e.target.value)}
                   className="pl-10 bg-secondary border-border focus:border-primary focus:ring-primary/20"
                   required
+                  disabled={!role}
                 />
               </div>
             </div>
@@ -93,6 +147,7 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10 bg-secondary border-border focus:border-primary focus:ring-primary/20"
                   required
+                  disabled={!role}
                 />
                 <button
                   type="button"

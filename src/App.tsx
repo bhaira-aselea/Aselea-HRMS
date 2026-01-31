@@ -4,10 +4,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Pages
 import Login from "./pages/Login";
-import SelectRole from "./pages/SelectRole";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import HRDashboard from "./pages/hr/HRDashboard";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
@@ -34,38 +34,37 @@ const App = () => (
             {/* Auth Routes */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/select-role" element={<SelectRole />} />
 
-            {/* Admin Routes */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/chat" element={<ChatModule role="admin" />} />
-            <Route path="/admin/attendance" element={<AttendanceModule role="admin" />} />
-            <Route path="/admin/leaves" element={<LeaveModule role="admin" />} />
-            <Route path="/admin/tasks" element={<TasksModule role="admin" />} />
-            <Route path="/admin/expenses" element={<ExpensesModule role="admin" />} />
-            <Route path="/admin/announcements" element={<AnnouncementsModule role="admin" />} />
-            <Route path="/admin/*" element={<AdminDashboard />} />
+            {/* Admin Routes - Protected */}
+            <Route path="/admin" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin/chat" element={<ProtectedRoute allowedRole="admin"><ChatModule role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/attendance" element={<ProtectedRoute allowedRole="admin"><AttendanceModule role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/leaves" element={<ProtectedRoute allowedRole="admin"><LeaveModule role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/tasks" element={<ProtectedRoute allowedRole="admin"><TasksModule role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/expenses" element={<ProtectedRoute allowedRole="admin"><ExpensesModule role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/announcements" element={<ProtectedRoute allowedRole="admin"><AnnouncementsModule role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/*" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
 
-            {/* HR Routes */}
-            <Route path="/hr" element={<HRDashboard />} />
-            <Route path="/hr/chat" element={<ChatModule role="hr" />} />
-            <Route path="/hr/attendance" element={<AttendanceModule role="hr" />} />
-            <Route path="/hr/leaves" element={<LeaveModule role="hr" />} />
-            <Route path="/hr/tasks" element={<TasksModule role="hr" />} />
-            <Route path="/hr/expenses" element={<ExpensesModule role="hr" />} />
-            <Route path="/hr/announcements" element={<AnnouncementsModule role="hr" />} />
-            <Route path="/hr/*" element={<HRDashboard />} />
+            {/* HR Routes - Protected */}
+            <Route path="/hr" element={<ProtectedRoute allowedRole="hr"><HRDashboard /></ProtectedRoute>} />
+            <Route path="/hr/chat" element={<ProtectedRoute allowedRole="hr"><ChatModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/attendance" element={<ProtectedRoute allowedRole="hr"><AttendanceModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/leaves" element={<ProtectedRoute allowedRole="hr"><LeaveModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/tasks" element={<ProtectedRoute allowedRole="hr"><TasksModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/expenses" element={<ProtectedRoute allowedRole="hr"><ExpensesModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/announcements" element={<ProtectedRoute allowedRole="hr"><AnnouncementsModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/*" element={<ProtectedRoute allowedRole="hr"><HRDashboard /></ProtectedRoute>} />
 
-            {/* Employee Routes */}
-            <Route path="/employee" element={<EmployeeDashboard />} />
-            <Route path="/employee/chat" element={<ChatModule role="employee" />} />
-            <Route path="/employee/attendance" element={<AttendanceModule role="employee" />} />
-            <Route path="/employee/calendar" element={<CalendarModule role="employee" />} />
-            <Route path="/employee/leave" element={<LeaveModule role="employee" />} />
-            <Route path="/employee/tasks" element={<TasksModule role="employee" />} />
-            <Route path="/employee/expenses" element={<ExpensesModule role="employee" />} />
-            <Route path="/employee/announcements" element={<AnnouncementsModule role="employee" />} />
-            <Route path="/employee/*" element={<EmployeeDashboard />} />
+            {/* Employee Routes - Protected */}
+            <Route path="/employee" element={<ProtectedRoute allowedRole="employee"><EmployeeDashboard /></ProtectedRoute>} />
+            <Route path="/employee/chat" element={<ProtectedRoute allowedRole="employee"><ChatModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/attendance" element={<ProtectedRoute allowedRole="employee"><AttendanceModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/calendar" element={<ProtectedRoute allowedRole="employee"><CalendarModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/leave" element={<ProtectedRoute allowedRole="employee"><LeaveModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/tasks" element={<ProtectedRoute allowedRole="employee"><TasksModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/expenses" element={<ProtectedRoute allowedRole="employee"><ExpensesModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/announcements" element={<ProtectedRoute allowedRole="employee"><AnnouncementsModule role="employee" /></ProtectedRoute>} />
+            <Route path="/employee/*" element={<ProtectedRoute allowedRole="employee"><EmployeeDashboard /></ProtectedRoute>} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/login" replace />} />
