@@ -14,6 +14,7 @@ import AdminHRAccounts from "./pages/admin/AdminHRAccounts";
 import AdminEmployees from "./pages/admin/AdminEmployees";
 import AdminLeaves from "./pages/admin/AdminLeaves";
 import AdminTasks from "./pages/admin/AdminTasks";
+import HRDetail from "./pages/admin/HRDetail";
 import HRDashboard from "./pages/hr/HRDashboard";
 import HREmployees from "./pages/hr/HREmployees";
 import HRProfile from "./pages/hr/HRProfile";
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/companies" element={<ProtectedRoute allowedRole="admin"><AdminCompanies /></ProtectedRoute>} />
             <Route path="/admin/hr-accounts" element={<ProtectedRoute allowedRole="admin"><AdminHRAccounts /></ProtectedRoute>} />
+            <Route path="/admin/hr-accounts/:hrId" element={<ProtectedRoute allowedRole="admin"><HRDetail /></ProtectedRoute>} />
             <Route path="/admin/employees" element={<ProtectedRoute allowedRole="admin"><AdminEmployees /></ProtectedRoute>} />
             <Route path="/admin/employees/:employeeId" element={<ProtectedRoute allowedRole="admin"><EmployeeDetail /></ProtectedRoute>} />
             <Route path="/admin/leaves" element={<ProtectedRoute allowedRole="admin"><AdminLeaves /></ProtectedRoute>} />
