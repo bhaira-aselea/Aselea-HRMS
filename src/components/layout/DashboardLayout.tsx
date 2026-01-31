@@ -37,7 +37,6 @@ interface NavItem {
 
 const adminNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { title: 'Companies', href: '/admin/companies', icon: Building2 },
   { title: 'HR Accounts', href: '/admin/hr-accounts', icon: Users },
   { title: 'Employees', href: '/admin/employees', icon: UserCircle },
   { title: 'Attendance', href: '/admin/attendance', icon: Clock },
