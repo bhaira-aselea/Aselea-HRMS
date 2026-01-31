@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
 import {
   LayoutDashboard,
   Building2,
@@ -25,6 +27,10 @@ import {
   Menu,
   X,
   User,
+  AlertTriangle,
+  Bell,
+  Info,
+  ArrowRight,
 } from 'lucide-react';
 import { useState } from 'react';
 import aseleaLogo from '@/assets/aselea-logo.png';
@@ -101,12 +107,57 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
+// Recent announcements for notification dropdown
+const recentAnnouncements = [
+  { 
+    id: '1', 
+    title: 'Office Closed for Maintenance', 
+    date: 'Jan 30, 2026', 
+    priority: 'high' as const,
+  },
+  { 
+    id: '2', 
+    title: 'New Health Insurance Benefits', 
+    date: 'Jan 28, 2026', 
+    priority: 'medium' as const,
+  },
+  { 
+    id: '3', 
+    title: 'Team Building Event', 
+    date: 'Jan 25, 2026', 
+    priority: 'low' as const,
+  },
+];
+
+const getPriorityIcon = (priority: string) => {
+  switch (priority) {
+    case 'high':
+      return <AlertTriangle className="h-4 w-4 text-destructive" />;
+    case 'medium':
+      return <Bell className="h-4 w-4 text-warning" />;
+    default:
+      return <Info className="h-4 w-4 text-primary" />;
+  }
+};
+
+const getPriorityColor = (priority: string) => {
+  switch (priority) {
+    case 'high':
+      return 'text-destructive';
+    case 'medium':
+      return 'text-warning';
+    default:
+      return 'text-primary';
+  }
+};
+
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { userRole, userName, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
 
   const navItems = getNavItems(userRole);
 
@@ -243,14 +294,81 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <Button variant="ghost" size="icon" className="relative">
-                <Megaphone className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
-                  3
-                </span>
-              </Button>
-            </div>
+            <Popover open={notificationOpen} onOpenChange={setNotificationOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Megaphone className="h-5 w-5" />
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
+                    {recentAnnouncements.length}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0 glass-card" align="end">
+                <div className="p-4 border-b border-border">
+                  <h3 className="font-semibold text-foreground flex items-center gap-2">
+                    <Megaphone className="h-4 w-4 text-primary" />
+                    Recent Announcements
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Latest updates and notifications
+                  </p>
+                </div>
+                <ScrollArea className="max-h-[400px]">
+                  <div className="p-2">
+                    {recentAnnouncements.map((announcement) => (
+                      <div
+                        key={announcement.id}
+                        className="p-3 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer mb-2"
+                        onClick={() => {
+                          setNotificationOpen(false);
+                          navigate(
+                            userRole === 'admin' 
+                              ? '/admin/announcements' 
+                              : userRole === 'hr' 
+                              ? '/hr/announcements' 
+                              : '/employee/announcements'
+                          );
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          {getPriorityIcon(announcement.priority)}
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              "text-sm font-medium text-foreground truncate",
+                              getPriorityColor(announcement.priority)
+                            )}>
+                              {announcement.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {announcement.date}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                <div className="p-3 border-t border-border">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between text-sm"
+                    onClick={() => {
+                      setNotificationOpen(false);
+                      navigate(
+                        userRole === 'admin' 
+                          ? '/admin/announcements' 
+                          : userRole === 'hr' 
+                          ? '/hr/announcements' 
+                          : '/employee/announcements'
+                      );
+                    }}
+                  >
+                    View All Announcements
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 

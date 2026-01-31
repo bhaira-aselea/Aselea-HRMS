@@ -113,7 +113,8 @@ const AnnouncementsModule = ({ role }: AnnouncementsModuleProps) => {
     return ann.priority === filter;
   });
 
-  const canCreate = role === 'hr';
+  // Both Admin and HR can create announcements
+  const canCreate = role === 'hr' || role === 'admin';
 
   return (
     <DashboardLayout>
