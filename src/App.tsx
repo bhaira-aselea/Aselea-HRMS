@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import HRDashboard from "./pages/hr/HRDashboard";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
+import EmployeeProfile from "./pages/employee/EmployeeProfile";
 
 // Modules
 import ChatModule from "./components/modules/ChatModule";
@@ -57,6 +58,7 @@ const App = () => (
 
             {/* Employee Routes - Protected */}
             <Route path="/employee" element={<ProtectedRoute allowedRole="employee"><EmployeeDashboard /></ProtectedRoute>} />
+            <Route path="/employee/profile" element={<ProtectedRoute allowedRole="employee"><EmployeeProfile /></ProtectedRoute>} />
             <Route path="/employee/chat" element={<ProtectedRoute allowedRole="employee"><ChatModule role="employee" /></ProtectedRoute>} />
             <Route path="/employee/attendance" element={<ProtectedRoute allowedRole="employee"><AttendanceModule role="employee" /></ProtectedRoute>} />
             <Route path="/employee/calendar" element={<ProtectedRoute allowedRole="employee"><CalendarModule role="employee" /></ProtectedRoute>} />
