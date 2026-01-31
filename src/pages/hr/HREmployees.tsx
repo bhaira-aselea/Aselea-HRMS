@@ -1,11 +1,13 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -21,6 +23,7 @@ import {
   Edit,
   Trash2,
   Download,
+  Upload,
 } from 'lucide-react';
 
 interface Employee {
@@ -33,18 +36,24 @@ interface Employee {
   joinDate: string;
   status: 'active' | 'on-leave' | 'inactive';
   employeeId: string;
+  password: string;
+  dateOfBirth: string;
+  address: string;
+  profilePhoto?: string;
+  reportingTo?: string;
 }
 
 const employees: Employee[] = [
-  { id: '1', name: 'John Doe', email: 'john.doe@company.com', phone: '+1 (555) 123-4567', department: 'Engineering', position: 'Senior Developer', joinDate: '2022-03-15', status: 'active', employeeId: 'EMP-001' },
-  { id: '2', name: 'Jane Smith', email: 'jane.smith@company.com', phone: '+1 (555) 234-5678', department: 'Marketing', position: 'Marketing Manager', joinDate: '2021-06-20', status: 'active', employeeId: 'EMP-002' },
-  { id: '3', name: 'Mike Johnson', email: 'mike.j@company.com', phone: '+1 (555) 345-6789', department: 'Sales', position: 'Sales Executive', joinDate: '2023-01-10', status: 'on-leave', employeeId: 'EMP-003' },
-  { id: '4', name: 'Sarah Wilson', email: 'sarah.w@company.com', phone: '+1 (555) 456-7890', department: 'HR', position: 'HR Specialist', joinDate: '2020-09-05', status: 'active', employeeId: 'EMP-004' },
-  { id: '5', name: 'Tom Brown', email: 'tom.brown@company.com', phone: '+1 (555) 567-8901', department: 'Engineering', position: 'Frontend Developer', joinDate: '2023-02-14', status: 'active', employeeId: 'EMP-005' },
-  { id: '6', name: 'Emily Davis', email: 'emily.d@company.com', phone: '+1 (555) 678-9012', department: 'Finance', position: 'Accountant', joinDate: '2022-11-20', status: 'active', employeeId: 'EMP-006' },
+  { id: '1', name: 'John Doe', email: 'john.doe@company.com', phone: '+1 (555) 123-4567', department: 'Engineering', position: 'Senior Developer', joinDate: '2022-03-15', status: 'active', employeeId: 'EMP-001', password: 'pass123', dateOfBirth: '1990-05-15', address: '123 Main St, City, State 12345' },
+  { id: '2', name: 'Jane Smith', email: 'jane.smith@company.com', phone: '+1 (555) 234-5678', department: 'Marketing', position: 'Marketing Manager', joinDate: '2021-06-20', status: 'active', employeeId: 'EMP-002', password: 'welcome456', dateOfBirth: '1988-08-22', address: '456 Oak Ave, City, State 23456' },
+  { id: '3', name: 'Mike Johnson', email: 'mike.j@company.com', phone: '+1 (555) 345-6789', department: 'Sales', position: 'Sales Executive', joinDate: '2023-01-10', status: 'on-leave', employeeId: 'EMP-003', password: 'mike2023', dateOfBirth: '1992-03-10', address: '789 Pine Rd, City, State 34567' },
+  { id: '4', name: 'Sarah Wilson', email: 'sarah.w@company.com', phone: '+1 (555) 456-7890', department: 'HR', position: 'HR Specialist', joinDate: '2020-09-05', status: 'active', employeeId: 'EMP-004', password: 'sarah789', dateOfBirth: '1991-11-30', address: '321 Elm St, City, State 45678' },
+  { id: '5', name: 'Tom Brown', email: 'tom.brown@company.com', phone: '+1 (555) 567-8901', department: 'Engineering', position: 'Frontend Developer', joinDate: '2023-02-14', status: 'active', employeeId: 'EMP-005', password: 'tom2024', dateOfBirth: '1993-07-18', address: '654 Maple Dr, City, State 56789' },
+  { id: '6', name: 'Emily Davis', email: 'emily.d@company.com', phone: '+1 (555) 678-9012', department: 'Finance', position: 'Accountant', joinDate: '2022-11-20', status: 'active', employeeId: 'EMP-006', password: 'emily321', dateOfBirth: '1989-12-05', address: '987 Cedar Ln, City, State 67890' },
 ];
 
 const HREmployees = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -191,22 +200,50 @@ const HREmployees = () => {
                       Add Employee
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="glass-card max-w-2xl">
+                  <DialogContent className="glass-card max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Add New Employee</DialogTitle>
                       <DialogDescription>Enter the details of the new employee</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 mt-4">
+                      {/* Profile Photo Upload */}
+                      <div className="space-y-2">
+                        <Label>Profile Photo</Label>
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-20 w-20 border-2 border-border">
+                            <AvatarFallback className="bg-primary/20 text-primary">
+                              <UserCircle className="h-10 w-10" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors cursor-pointer bg-secondary/30">
+                              <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
+                              <p className="text-sm text-muted-foreground">Click to upload photo</p>
+                              <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Name and Employee ID (Username) */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Full Name</Label>
                           <Input placeholder="John Doe" className="bg-secondary border-border" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Employee ID</Label>
-                          <Input placeholder="EMP-XXX" className="bg-secondary border-border" />
+                          <Label>Employee ID (Username) <span className="text-xs text-muted-foreground">- Used for login</span></Label>
+                          <Input placeholder="EMP-XXX or john.doe" className="bg-secondary border-border" />
                         </div>
                       </div>
+
+                      {/* Password */}
+                      <div className="space-y-2">
+                        <Label>Password <span className="text-xs text-muted-foreground">- Initial login password</span></Label>
+                        <Input type="text" placeholder="Create password for employee" className="bg-secondary border-border" />
+                      </div>
+
+                      {/* Email and Phone */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Email</Label>
@@ -217,6 +254,20 @@ const HREmployees = () => {
                           <Input type="tel" placeholder="+1 (555) 123-4567" className="bg-secondary border-border" />
                         </div>
                       </div>
+
+                      {/* Date of Birth */}
+                      <div className="space-y-2">
+                        <Label>Date of Birth</Label>
+                        <Input type="date" className="bg-secondary border-border" />
+                      </div>
+
+                      {/* Address */}
+                      <div className="space-y-2">
+                        <Label>Address</Label>
+                        <Textarea placeholder="Full address" className="bg-secondary border-border min-h-[80px]" />
+                      </div>
+
+                      {/* Department and Position */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Department</Label>
@@ -238,6 +289,8 @@ const HREmployees = () => {
                           <Input placeholder="Job Title" className="bg-secondary border-border" />
                         </div>
                       </div>
+
+                      {/* Join Date */}
                       <div className="space-y-2">
                         <Label>Join Date</Label>
                         <Input type="date" className="bg-secondary border-border" />
@@ -266,6 +319,7 @@ const HREmployees = () => {
                 <TableHeader>
                   <TableRow className="bg-secondary/50 hover:bg-secondary/50">
                     <TableHead>Employee</TableHead>
+                    <TableHead>Login Credentials</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Position</TableHead>
@@ -287,6 +341,18 @@ const HREmployees = () => {
                           <div>
                             <p className="font-medium text-foreground">{employee.name}</p>
                             <p className="text-xs text-muted-foreground">{employee.employeeId}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <UserCircle className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-mono text-xs text-foreground">{employee.employeeId}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-xs text-muted-foreground">Password:</span>
+                            <span className="font-mono text-xs text-primary">{employee.password}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -315,7 +381,7 @@ const HREmployees = () => {
                       <TableCell>{getStatusBadge(employee.status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/hr/employees/${employee.id}`)}>
                             <Eye className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="sm">
