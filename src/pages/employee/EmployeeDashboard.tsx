@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,33 +14,83 @@ import {
   CheckCircle,
   Timer,
   Megaphone,
+  Loader2,
 } from 'lucide-react';
-
-const myTasks = [
-  { id: 1, title: 'Complete Q4 Report', progress: 75, status: 'in-progress', deadline: 'Feb 5' },
-  { id: 2, title: 'Review client proposals', progress: 30, status: 'in-progress', deadline: 'Feb 3' },
-  { id: 3, title: 'Team meeting preparation', progress: 100, status: 'completed', deadline: 'Feb 1' },
-  { id: 4, title: 'Update documentation', progress: 0, status: 'pending', deadline: 'Feb 7' },
-];
-
-const announcements = [
-  { id: 1, title: 'Office Closed for Maintenance', date: 'Feb 15', priority: 'high' },
-  { id: 2, title: 'New Health Insurance Benefits', date: 'Feb 10', priority: 'medium' },
-  { id: 3, title: 'Team Building Event', date: 'Feb 20', priority: 'low' },
-];
+import { employeeAPI, attendanceAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 const EmployeeDashboard = () => {
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [isPunchedIn, setIsPunchedIn] = useState(false);
   const [punchTime, setPunchTime] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const handlePunch = () => {
-    if (!isPunchedIn) {
-      setIsPunchedIn(true);
-      setPunchTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-    } else {
-      setIsPunchedIn(false);
+  const fetchDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await employeeAPI.getDashboard();
+      const data = response.data.data;
+      setDashboardData(data);
+      setMyTasks(data?.tasks || []);
+      setAnnouncements(data?.announcements || []);
+      setIsPunchedIn(data?.attendance?.isPunchedIn || false);
+      setPunchTime(data?.attendance?.punchTime || null);
+    } catch (error: any) {
+      console.error('Failed to fetch dashboard:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load dashboard',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  const handlePunch = async () => {
+    try {
+      if (!isPunchedIn) {
+        const response = await attendanceAPI.checkIn();
+        setIsPunchedIn(true);
+        setPunchTime(response.data.data?.checkIn || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+        toast({
+          title: 'Success',
+          description: 'Checked in successfully',
+        });
+      } else {
+        await attendanceAPI.checkOut();
+        setIsPunchedIn(false);
+        toast({
+          title: 'Success',
+          description: 'Checked out successfully',
+        });
+      }
+      fetchDashboard();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to punch in/out',
+        variant: 'destructive',
+      });
     }
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -119,26 +169,26 @@ const EmployeeDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatsCard
             title="Leave Balance"
-            value={12}
+            value={dashboardData?.stats?.leaveBalance || 0}
             icon={CalendarCheck}
             suffix=" days"
             className="stagger-1"
           />
           <StatsCard
             title="Active Tasks"
-            value={4}
+            value={dashboardData?.stats?.activeTasks || 0}
             icon={ClipboardList}
             className="stagger-2"
           />
           <StatsCard
             title="Pending Expenses"
-            value={2}
+            value={dashboardData?.stats?.pendingExpenses || 0}
             icon={Receipt}
             className="stagger-3"
           />
           <StatsCard
             title="This Month Attendance"
-            value={92}
+            value={dashboardData?.stats?.attendancePercentage || 0}
             icon={Clock}
             suffix="%"
             className="stagger-4"

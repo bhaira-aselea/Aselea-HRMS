@@ -1,60 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, UserRole } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, EyeOff, Lock, User, Shield, Users, UserCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import aseleaLogo from '@/assets/aselea-logo.png';
 
 const Login = () => {
-  const [role, setRole] = useState<UserRole>(null);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isAuthenticated, userRole, loading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && isAuthenticated && userRole) {
+      navigate(`/${userRole}`);
+    }
+  }, [isAuthenticated, userRole, loading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!role) {
-      setError('Please select a role');
+    if (!email || !password) {
+      setError('Please enter email and password');
       return;
     }
 
     setIsLoading(true);
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const success = login(username, password, role);
-    if (success) {
-      // Redirect based on selected role
-      navigate(`/${role}`);
-    } else {
-      setError('Invalid username or password');
-    }
-    setIsLoading(false);
-  };
-
-  const getRoleIcon = (roleName: string) => {
-    switch (roleName) {
-      case 'admin':
-        return Shield;
-      case 'hr':
-        return Users;
-      case 'employee':
-        return UserCircle;
-      default:
-        return UserCircle;
+    try {
+      const success = await login(email, password);
+      if (success) {
+        // Navigate will happen automatically via useEffect when userRole is set
+      } else {
+        setError('Invalid email or password');
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -84,51 +88,20 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="role" className="text-sm font-medium">
-                Select Role <span className="text-destructive">*</span>
-              </Label>
-              <Select value={role || ''} onValueChange={(value) => setRole(value as UserRole)}>
-                <SelectTrigger className="bg-secondary border-border focus:border-primary">
-                  <SelectValue placeholder="Choose your role..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-primary" />
-                      <span>Admin</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="hr">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-primary" />
-                      <span>HR Manager</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="employee">
-                    <div className="flex items-center gap-2">
-                      <UserCircle className="h-4 w-4 text-primary" />
-                      <span>Employee</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-medium">
-                Username
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email Address
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 bg-secondary border-border focus:border-primary focus:ring-primary/20"
                   required
-                  disabled={!role}
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -147,7 +120,7 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10 bg-secondary border-border focus:border-primary focus:ring-primary/20"
                   required
-                  disabled={!role}
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -181,10 +154,17 @@ const Login = () => {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-muted-foreground">
-              Demo credentials: bhaira123 / 123456
-            </p>
+          <div className="mt-6 text-center space-y-2">
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline"
+              onClick={() => {
+                // TODO: Implement forgot password flow
+                alert('Forgot password feature coming soon!');
+              }}
+            >
+              Forgot password?
+            </button>
           </div>
         </CardContent>
       </Card>

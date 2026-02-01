@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,15 +13,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { CalendarCheck, Check, X, Building2, UserCircle, Filter } from 'lucide-react';
+import { CalendarCheck, Check, X, Building2, UserCircle, Filter, Loader2 } from 'lucide-react';
+import { adminAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface LeaveRequest {
-  id: string;
-  employeeName: string;
-  employeeId: string;
-  role: 'employee' | 'hr';
-  company: string;
-  department: string;
+  _id: string;
+  employee: {
+    name: string;
+    employeeId: string;
+    company?: { name: string };
+    department?: string;
+  };
   leaveType: 'casual' | 'sick' | 'annual' | 'unpaid';
   startDate: string;
   endDate: string;
@@ -29,117 +32,64 @@ interface LeaveRequest {
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   appliedOn: string;
-  avatar?: string;
 }
 
-const leaveRequests: LeaveRequest[] = [
-  {
-    id: '1',
-    employeeName: 'John Doe',
-    employeeId: 'EMP-001',
-    role: 'employee',
-    company: 'Aselea Technologies',
-    department: 'Engineering',
-    leaveType: 'casual',
-    startDate: '2026-02-10',
-    endDate: '2026-02-12',
-    days: 3,
-    reason: 'Family function',
-    status: 'pending',
-    appliedOn: '2026-01-28',
-  },
-  {
-    id: '2',
-    employeeName: 'Jane Smith',
-    employeeId: 'EMP-002',
-    role: 'employee',
-    company: 'Aselea Technologies',
-    department: 'Marketing',
-    leaveType: 'sick',
-    startDate: '2026-02-05',
-    endDate: '2026-02-06',
-    days: 2,
-    reason: 'Medical checkup',
-    status: 'approved',
-    appliedOn: '2026-01-25',
-  },
-  {
-    id: '3',
-    employeeName: 'Sarah Johnson',
-    employeeId: 'HR-001',
-    role: 'hr',
-    company: 'Aselea Technologies',
-    department: 'Human Resources',
-    leaveType: 'annual',
-    startDate: '2026-03-01',
-    endDate: '2026-03-07',
-    days: 7,
-    reason: 'Vacation',
-    status: 'pending',
-    appliedOn: '2026-01-29',
-  },
-  {
-    id: '4',
-    employeeName: 'Mike Johnson',
-    employeeId: 'EMP-003',
-    role: 'employee',
-    company: 'Innovation Corp',
-    department: 'Sales',
-    leaveType: 'casual',
-    startDate: '2026-02-15',
-    endDate: '2026-02-16',
-    days: 2,
-    reason: 'Personal work',
-    status: 'rejected',
-    appliedOn: '2026-01-27',
-  },
-  {
-    id: '5',
-    employeeName: 'Michael Chen',
-    employeeId: 'HR-002',
-    role: 'hr',
-    company: 'Innovation Corp',
-    department: 'HR Operations',
-    leaveType: 'sick',
-    startDate: '2026-02-08',
-    endDate: '2026-02-09',
-    days: 2,
-    reason: 'Flu',
-    status: 'approved',
-    appliedOn: '2026-01-26',
-  },
-];
-
 const AdminLeaves = () => {
-  const [requests, setRequests] = useState<LeaveRequest[]>(leaveRequests);
+  const { toast } = useToast();
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [companyFilter, setCompanyFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
 
-  const handleApprove = (id: string) => {
-    setRequests(requests.map(req => 
-      req.id === id ? { ...req, status: 'approved' as const } : req
+  const fetchLeaves = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await adminAPI.getLeaves();
+      setLeaveRequests(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch leaves:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch leave requests',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchLeaves();
+  }, [fetchLeaves]);
+
+  const handleApprove = async (id: string) => {
+    setLeaveRequests(leaveRequests.map(req => 
+      req._id === id ? { ...req, status: 'approved' as const } : req
     ));
+    // TODO: Call backend API to approve leave
   };
 
-  const handleReject = (id: string) => {
-    setRequests(requests.map(req => 
-      req.id === id ? { ...req, status: 'rejected' as const } : req
+  const handleReject = async (id: string) => {
+    setLeaveRequests(leaveRequests.map(req => 
+      req._id === id ? { ...req, status: 'rejected' as const } : req
     ));
+    // TODO: Call backend API to reject leave
   };
 
-  const filteredRequests = requests.filter(req => {
-    const matchesCompany = companyFilter === 'all' || req.company === companyFilter;
-    const matchesRole = roleFilter === 'all' || req.role === roleFilter;
+  const filteredRequests = leaveRequests.filter(req => {
+    const matchesCompany = companyFilter === 'all' || req.employee.company?.name === companyFilter;
+    const matchesType = typeFilter === 'all' || req.leaveType === typeFilter;
     const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
-    return matchesCompany && matchesRole && matchesStatus;
+    return matchesCompany && matchesType && matchesStatus;
   });
 
   const stats = {
-    total: requests.length,
-    pending: requests.filter(r => r.status === 'pending').length,
-    approved: requests.filter(r => r.status === 'approved').length,
-    rejected: requests.filter(r => r.status === 'rejected').length,
+    total: leaveRequests.length,
+    pending: leaveRequests.filter(r => r.status === 'pending').length,
+    approved: leaveRequests.filter(r => r.status === 'approved').length,
+    rejected: leaveRequests.filter(r => r.status === 'rejected').length,
   };
 
   const getLeaveTypeBadge = (type: string) => {
@@ -293,34 +243,41 @@ const AdminLeaves = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((request) => (
-                  <TableRow key={request.id}>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredRequests.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No leave requests found matching the filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredRequests.map((request) => (
+                  <TableRow key={request._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={request.avatar} />
                           <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                            {request.employeeName.split(' ').map(n => n[0]).join('')}
+                            {request.employee.name.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium text-sm">{request.employeeName}</p>
-                          <div className="flex items-center gap-2">
-                            <p className="text-xs text-muted-foreground">{request.employeeId}</p>
-                            <Badge variant="outline" className="text-xs py-0 px-1.5">
-                              {request.role === 'hr' ? 'HR' : 'EMP'}
-                            </Badge>
-                          </div>
+                          <p className="font-medium text-sm">{request.employee.name}</p>
+                          <p className="text-xs text-muted-foreground">{request.employee.employeeId}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 text-sm">
                         <Building2 className="h-3 w-3 text-muted-foreground" />
-                        {request.company}
+                        {request.employee.company?.name || 'N/A'}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{request.department}</TableCell>
+                    <TableCell className="text-sm">{request.employee.department || 'N/A'}</TableCell>
                     <TableCell>{getLeaveTypeBadge(request.leaveType)}</TableCell>
                     <TableCell>
                       <div className="text-sm">
@@ -345,7 +302,7 @@ const AdminLeaves = () => {
                             size="sm"
                             variant="ghost"
                             className="text-success hover:text-success hover:bg-success/10"
-                            onClick={() => handleApprove(request.id)}
+                            onClick={() => handleApprove(request._id)}
                           >
                             <Check className="h-4 w-4" />
                           </Button>
@@ -353,7 +310,7 @@ const AdminLeaves = () => {
                             size="sm"
                             variant="ghost"
                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleReject(request.id)}
+                            onClick={() => handleReject(request._id)}
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -363,7 +320,8 @@ const AdminLeaves = () => {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+                )}
               </TableBody>
             </Table>
           </CardContent>

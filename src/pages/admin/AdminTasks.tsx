@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,10 @@ import {
   Video,
   FileText,
   Code,
+  Loader2,
 } from 'lucide-react';
+import { adminAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface TaskAttachment {
   id: string;
@@ -50,15 +53,15 @@ interface SubTask {
 }
 
 interface Task {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   assignedTo: {
-    id: string;
+    _id: string;
     name: string;
     email: string;
-    company: string;
-    department: string;
+    company?: { name: string };
+    department?: string;
   };
   priority: 'low' | 'medium' | 'high';
   status: 'pending' | 'in-progress' | 'completed';
@@ -71,127 +74,18 @@ interface Task {
   notes: string;
 }
 
-const initialTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Complete Project Documentation',
-    description: 'Write comprehensive documentation for the new feature',
-    assignedTo: {
-      id: 'EMP-001',
-      name: 'John Doe',
-      email: 'john.doe@aselea.com',
-      company: 'Aselea Technologies',
-      department: 'Engineering',
-    },
-    priority: 'high',
-    status: 'in-progress',
-    progress: 60,
-    dueDate: '2026-02-05',
-    createdDate: '2026-01-28',
-    createdBy: 'admin',
-    subTasks: [
-      { id: 's1', title: 'API Documentation', completed: true },
-      { id: 's2', title: 'User Guide', completed: false },
-    ],
-    attachments: [
-      { id: 'a1', name: 'api-docs.pdf', type: 'document', url: '#', uploadedAt: '2026-01-30' },
-      { id: 'a2', name: 'screenshot-1.png', type: 'image', url: '#', uploadedAt: '2026-01-30' },
-    ],
-    notes: 'Completed API documentation section. Working on user guide now.',
-  },
-  {
-    id: '2',
-    title: 'Prepare Q1 Marketing Strategy',
-    description: 'Create marketing plan and budget for Q1 2026',
-    assignedTo: {
-      id: 'EMP-002',
-      name: 'Jane Smith',
-      email: 'jane.smith@aselea.com',
-      company: 'Aselea Technologies',
-      department: 'Marketing',
-    },
-    priority: 'medium',
-    status: 'pending',
-    progress: 0,
-    dueDate: '2026-02-15',
-    createdDate: '2026-01-29',
-    createdBy: 'admin',
-    subTasks: [],
-    attachments: [],
-    notes: '',
-  },
-  {
-    id: '3',
-    title: 'Client Meeting Preparation',
-    description: 'Prepare presentation and demo for client meeting',
-    assignedTo: {
-      id: 'EMP-003',
-      name: 'Mike Johnson',
-      email: 'mike.j@innovation.com',
-      company: 'Innovation Corp',
-      department: 'Sales',
-    },
-    priority: 'high',
-    status: 'completed',
-    progress: 100,
-    dueDate: '2026-02-01',
-    createdDate: '2026-01-25',
-    createdBy: 'admin',
-    subTasks: [
-      { id: 's3', title: 'Create presentation', completed: true },
-      { id: 's4', title: 'Prepare demo', completed: true },
-    ],
-    attachments: [
-      { id: 'a3', name: 'presentation.pptx', type: 'document', url: '#', uploadedAt: '2026-01-31' },
-      { id: 'a4', name: 'demo-video.mp4', type: 'video', url: '#', uploadedAt: '2026-01-31' },
-    ],
-    notes: 'All tasks completed. Client meeting went well!',
-  },
-  {
-    id: '4',
-    title: 'Daily Task: Code Cleanup',
-    description: 'Clean up old code and optimize performance',
-    assignedTo: {
-      id: 'EMP-005',
-      name: 'Tom Brown',
-      email: 'tom.brown@innovation.com',
-      company: 'Innovation Corp',
-      department: 'Engineering',
-    },
-    priority: 'low',
-    status: 'in-progress',
-    progress: 45,
-    dueDate: '2026-02-02',
-    createdDate: '2026-01-30',
-    createdBy: 'employee',
-    subTasks: [
-      { id: 's5', title: 'Remove unused functions', completed: true },
-      { id: 's6', title: 'Optimize database queries', completed: false },
-    ],
-    attachments: [
-      { id: 'a5', name: 'api-endpoints.json', type: 'api', url: '#', uploadedAt: '2026-01-31' },
-    ],
-    notes: 'Removed 15 unused functions. Working on database optimization.',
-  },
-];
-
-const employees = [
-  { id: 'EMP-001', name: 'John Doe', email: 'john.doe@aselea.com', company: 'Aselea Technologies', department: 'Engineering' },
-  { id: 'EMP-002', name: 'Jane Smith', email: 'jane.smith@aselea.com', company: 'Aselea Technologies', department: 'Marketing' },
-  { id: 'EMP-003', name: 'Mike Johnson', email: 'mike.j@innovation.com', company: 'Innovation Corp', department: 'Sales' },
-  { id: 'EMP-004', name: 'Sarah Wilson', email: 'sarah.w@aselea.com', company: 'Aselea Technologies', department: 'HR' },
-  { id: 'EMP-005', name: 'Tom Brown', email: 'tom.brown@innovation.com', company: 'Innovation Corp', department: 'Engineering' },
-];
-
 const AdminTasks = () => {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const { toast } = useToast();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [companyFilter, setCompanyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [companyFilter, setCompanyFilter] = useState('all');
   const [creatorFilter, setCreatorFilter] = useState('all');
-
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -200,42 +94,81 @@ const AdminTasks = () => {
     dueDate: '',
   });
 
-  const handleCreateTask = () => {
-    const employee = employees.find(e => e.id === newTask.employeeId);
-    if (!employee) return;
+  const fetchTasks = useCallback(async () => {
+    try {
+      setLoading(true);
+      // TODO: Add getTasks API when backend endpoint is ready
+      // const [tasksResponse, employeesResponse] = await Promise.all([
+      //   adminAPI.getTasks(),
+      //   adminAPI.getEmployees(),
+      // ]);
+      const employeesResponse = await adminAPI.getEmployees();
+      // setTasks(tasksResponse.data.data || []);
+      setEmployees(employeesResponse.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch tasks:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load tasks',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-    const task: Task = {
-      id: Date.now().toString(),
-      title: newTask.title,
-      description: newTask.description,
-      assignedTo: employee,
-      priority: newTask.priority,
-      status: 'pending',
-      progress: 0,
-      dueDate: newTask.dueDate,
-      createdDate: new Date().toISOString(),
-      createdBy: 'admin',
-      subTasks: [],
-      attachments: [],
-      notes: '',
-    };
-    setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', employeeId: '', priority: 'medium', dueDate: '' });
-    setIsCreateDialogOpen(false);
-  };
+  const handleCreateTask = async () => {
+    if (!newTask.title || !newTask.employeeId || !newTask.dueDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-  const handleDeleteTask = (taskId: string) => {
-    if (confirm('Are you sure you want to delete this task?')) {
-      setTasks(tasks.filter(t => t.id !== taskId));
+    try {
+      // TODO: Add createTask API when backend endpoint is ready
+      // await adminAPI.createTask(newTask);
+      toast({
+        title: 'Success',
+        description: 'Task created successfully',
+      });
+      setIsCreateDialogOpen(false);
+      setNewTask({ title: '', description: '', employeeId: '', priority: 'medium', dueDate: '' });
+      fetchTasks();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create task',
+        variant: 'destructive',
+      });
     }
   };
 
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
   const filteredTasks = tasks.filter(task => {
-    const matchesCompany = companyFilter === 'all' || task.assignedTo.company === companyFilter;
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    const matchesCreator = creatorFilter === 'all' || task.createdBy === creatorFilter;
-    return matchesCompany && matchesStatus && matchesCreator;
+    const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+    return matchesStatus && matchesPriority;
   });
+
+  const stats = {
+    total: tasks.length,
+    pending: tasks.filter(t => t.status === 'pending').length,
+    inProgress: tasks.filter(t => t.status === 'in-progress').length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (confirm('Are you sure you want to delete this task?')) {
+      setTasks(tasks.filter(t => t._id !== taskId));
+      // TODO: Call backend API to delete task
+    }
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -261,13 +194,6 @@ const AdminTasks = () => {
       default:
         return 'bg-muted';
     }
-  };
-
-  const stats = {
-    total: tasks.length,
-    completed: tasks.filter(t => t.status === 'completed').length,
-    inProgress: tasks.filter(t => t.status === 'in-progress').length,
-    pending: tasks.filter(t => t.status === 'pending').length,
   };
 
   return (
@@ -492,8 +418,21 @@ const AdminTasks = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTasks.map((task) => (
-                  <TableRow key={task.id}>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredTasks.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No tasks found matching the filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredTasks.map((task) => (
+                  <TableRow key={task._id}>
                     <TableCell>
                       <div>
                         <p className="font-medium">{task.title}</p>
@@ -514,14 +453,14 @@ const AdminTasks = () => {
                         </Avatar>
                         <div>
                           <p className="font-medium text-sm">{task.assignedTo.name}</p>
-                          <p className="text-xs text-muted-foreground">{task.assignedTo.id}</p>
+                          <p className="text-xs text-muted-foreground">{task.assignedTo._id}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 text-sm">
                         <Building2 className="h-3 w-3 text-muted-foreground" />
-                        {task.assignedTo.company}
+                        {task.assignedTo.company?.name || 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -565,14 +504,15 @@ const AdminTasks = () => {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteTask(task.id)}
+                          onClick={() => handleDeleteTask(task._id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -607,7 +547,7 @@ const AdminTasks = () => {
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Company</Label>
-                      <p className="mt-2">{selectedTask.assignedTo.company}</p>
+                      <p className="mt-2">{selectedTask.assignedTo.company?.name || 'N/A'}</p>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Priority</Label>

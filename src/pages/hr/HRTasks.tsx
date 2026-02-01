@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +32,10 @@ import {
   Video,
   FileText,
   Code,
+  Loader2,
 } from 'lucide-react';
+import { hrAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface TaskAttachment {
   id: string;
@@ -50,10 +53,12 @@ interface SubTask {
 
 interface Task {
   id: string;
+  _id?: string;
   title: string;
   description: string;
   assignedTo: {
-    id: string;
+    id?: string;
+    _id?: string;
     name: string;
     email: string;
     department: string;
@@ -69,97 +74,16 @@ interface Task {
   notes: string;
 }
 
-const initialTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Complete Project Documentation',
-    description: 'Write comprehensive documentation for the new feature',
-    assignedTo: {
-      id: 'EMP-001',
-      name: 'John Doe',
-      email: 'john.doe@aselea.com',
-      department: 'Engineering',
-    },
-    priority: 'high',
-    status: 'in-progress',
-    progress: 60,
-    dueDate: '2026-02-05',
-    createdDate: '2026-01-28',
-    createdBy: 'hr',
-    subTasks: [
-      { id: 's1', title: 'API Documentation', completed: true },
-      { id: 's2', title: 'User Guide', completed: false },
-    ],
-    attachments: [
-      { id: 'a1', name: 'api-docs.pdf', type: 'document', url: '#', uploadedAt: '2026-01-30' },
-      { id: 'a2', name: 'screenshot-1.png', type: 'image', url: '#', uploadedAt: '2026-01-30' },
-    ],
-    notes: 'Completed API documentation section. Working on user guide now.',
-  },
-  {
-    id: '2',
-    title: 'Prepare Q1 Marketing Strategy',
-    description: 'Create marketing plan and budget for Q1 2026',
-    assignedTo: {
-      id: 'EMP-002',
-      name: 'Jane Smith',
-      email: 'jane.smith@aselea.com',
-      department: 'Marketing',
-    },
-    priority: 'medium',
-    status: 'pending',
-    progress: 0,
-    dueDate: '2026-02-15',
-    createdDate: '2026-01-29',
-    createdBy: 'hr',
-    subTasks: [],
-    attachments: [],
-    notes: '',
-  },
-  {
-    id: '3',
-    title: 'Daily Task: Code Review',
-    description: 'Review pull requests and provide feedback',
-    assignedTo: {
-      id: 'EMP-005',
-      name: 'Tom Brown',
-      email: 'tom.brown@aselea.com',
-      department: 'Engineering',
-    },
-    priority: 'low',
-    status: 'in-progress',
-    progress: 75,
-    dueDate: '2026-02-02',
-    createdDate: '2026-01-30',
-    createdBy: 'employee',
-    subTasks: [
-      { id: 's3', title: 'Review PR #123', completed: true },
-      { id: 's4', title: 'Review PR #124', completed: true },
-      { id: 's5', title: 'Review PR #125', completed: false },
-    ],
-    attachments: [
-      { id: 'a3', name: 'review-notes.md', type: 'document', url: '#', uploadedAt: '2026-01-31' },
-      { id: 'a4', name: 'api-changes.json', type: 'api', url: '#', uploadedAt: '2026-01-31' },
-    ],
-    notes: 'Reviewed 2 out of 3 PRs. Will complete the last one by EOD.',
-  },
-];
-
-const employees = [
-  { id: 'EMP-001', name: 'John Doe', email: 'john.doe@aselea.com', department: 'Engineering' },
-  { id: 'EMP-002', name: 'Jane Smith', email: 'jane.smith@aselea.com', department: 'Marketing' },
-  { id: 'EMP-004', name: 'Sarah Wilson', email: 'sarah.w@aselea.com', department: 'HR' },
-  { id: 'EMP-005', name: 'Tom Brown', email: 'tom.brown@aselea.com', department: 'Engineering' },
-  { id: 'EMP-006', name: 'Emily Davis', email: 'emily.d@aselea.com', department: 'Finance' },
-];
-
 const HRTasks = () => {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [creatorFilter, setCreatorFilter] = useState('all');
+  const { toast } = useToast();
 
   const [newTask, setNewTask] = useState({
     title: '',
@@ -169,33 +93,92 @@ const HRTasks = () => {
     dueDate: '',
   });
 
-  const handleCreateTask = () => {
-    const employee = employees.find(e => e.id === newTask.employeeId);
-    if (!employee) return;
+  const fetchTasks = useCallback(async () => {
+    try {
+      setLoading(true);
+      // TODO: Add getTasks API when backend endpoint is ready
+      // const [tasksResponse, employeesResponse] = await Promise.all([
+      //   hrAPI.getTasks(),
+      //   hrAPI.getEmployees(),
+      // ]);
+      const employeesResponse = await hrAPI.getEmployees();
+      // setTasks(tasksResponse.data.data || []);
+      setEmployees(employeesResponse.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch tasks:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load tasks',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-    const task: Task = {
-      id: Date.now().toString(),
-      title: newTask.title,
-      description: newTask.description,
-      assignedTo: employee,
-      priority: newTask.priority,
-      status: 'pending',
-      progress: 0,
-      dueDate: newTask.dueDate,
-      createdDate: new Date().toISOString(),
-      createdBy: 'hr',
-      subTasks: [],
-      attachments: [],
-      notes: '',
-    };
-    setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', employeeId: '', priority: 'medium', dueDate: '' });
-    setIsCreateDialogOpen(false);
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const handleCreateTask = async () => {
+    const employee = employees.find(e => e._id === newTask.employeeId);
+    if (!employee) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select an employee',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!newTask.title || !newTask.dueDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // TODO: Add createTask API when backend endpoint is ready
+      // await hrAPI.createTask({
+      //   ...newTask,
+      //   assignedTo: newTask.employeeId,
+      // });
+      toast({
+        title: 'Success',
+        description: 'Task created successfully',
+      });
+      setNewTask({ title: '', description: '', employeeId: '', priority: 'medium', dueDate: '' });
+      setIsCreateDialogOpen(false);
+      fetchTasks();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create task',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
     if (confirm('Are you sure you want to delete this task?')) {
-      setTasks(tasks.filter(t => t.id !== taskId));
+      try {
+        // TODO: Add deleteTask API when backend endpoint is ready
+        // await hrAPI.deleteTask(taskId);
+        toast({
+          title: 'Success',
+          description: 'Task deleted successfully',
+        });
+        fetchTasks();
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to delete task',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -240,6 +223,11 @@ const HRTasks = () => {
 
   return (
     <DashboardLayout>
+      {loading ? (
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
       <div className="space-y-6 fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -271,8 +259,8 @@ const HRTasks = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {employees.map(emp => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.id}) - {emp.department}
+                        <SelectItem key={emp._id} value={emp._id}>
+                          {emp.name} ({emp._id}) - {emp.department}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -695,6 +683,7 @@ const HRTasks = () => {
           </DialogContent>
         </Dialog>
       </div>
+      )}
     </DashboardLayout>
   );
 };

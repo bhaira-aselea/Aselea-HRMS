@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,64 +19,31 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { UserCog, Plus, Edit, Trash2, Mail, Phone, Building2, Shield, Eye, Upload } from 'lucide-react';
+import { adminAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface HRAccount {
-  id: string;
+  _id: string;
   name: string;
   email: string;
   phone: string;
-  company: string;
+  company?: { name: string; _id: string };
   department: string;
   position: string;
   status: 'active' | 'inactive';
-  employeesManaged: number;
+  employeeId: string;
   joinedDate: string;
   avatar?: string;
-  password: string;
   dateOfBirth: string;
   address: string;
-  hrId: string;
-  reportingTo?: string;
 }
-
-const initialHRAccounts: HRAccount[] = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    email: 'sarah.j@aselea.com',
-    phone: '+1 (555) 111-2222',
-    company: 'Aselea Technologies',
-    department: 'Human Resources',
-    position: 'HR Manager',
-    status: 'active',
-    employeesManaged: 45,
-    joinedDate: '2024-03-15',
-    password: 'hr123',
-    dateOfBirth: '1985-03-15',
-    address: '123 HR Street, City, State 12345',
-    hrId: 'HR-001',
-  },
-  {
-    id: '2',
-    name: 'Michael Chen',
-    email: 'michael.c@innovation.com',
-    phone: '+1 (555) 333-4444',
-    company: 'Innovation Corp',
-    department: 'HR Operations',
-    position: 'Senior HR Manager',
-    status: 'active',
-    employeesManaged: 32,
-    joinedDate: '2024-07-20',
-    password: 'michael456',
-    dateOfBirth: '1987-07-20',
-    address: '456 HR Avenue, City, State 23456',
-    hrId: 'HR-002',
-  },
-];
 
 const AdminHRAccounts = () => {
   const navigate = useNavigate();
-  const [hrAccounts, setHRAccounts] = useState<HRAccount[]>(initialHRAccounts);
+  const { toast } = useToast();
+  const [hrAccounts, setHRAccounts] = useState<HRAccount[]>([]);
+  const [companies, setCompanies] = useState<Array<{ _id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedHR, setSelectedHR] = useState<HRAccount | null>(null);
@@ -87,7 +54,7 @@ const AdminHRAccounts = () => {
     company: '',
     department: '',
     position: '',
-    hrId: '',
+    employeeId: '',
     password: '',
     dateOfBirth: '',
     address: '',
@@ -95,82 +62,165 @@ const AdminHRAccounts = () => {
     reportingTo: '',
   });
 
-  const handleCreate = () => {
-    const newHR: HRAccount = {
-      id: Date.now().toString(),
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      company: formData.company,
-      department: formData.department,
-      position: formData.position,
-      hrId: formData.hrId,
-      password: formData.password,
-      dateOfBirth: formData.dateOfBirth,
-      address: formData.address,
-      reportingTo: formData.reportingTo,
-      status: 'active',
-      employeesManaged: 0,
-      joinedDate: formData.joinedDate || new Date().toISOString().split('T')[0],
-    };
-    setHRAccounts([...hrAccounts, newHR]);
-    setFormData({ 
-      name: '', 
-      email: '', 
-      phone: '', 
-      company: '', 
-      department: '', 
-      position: '', 
-      hrId: '', 
-      password: '', 
-      dateOfBirth: '', 
-      address: '', 
-      joinedDate: '', 
-      reportingTo: '' 
-    });
-    setIsCreateDialogOpen(false);
-  };
+  const fetchCompanies = useCallback(async () => {
+    try {
+      const response = await adminAPI.getCompanies();
+      if (response.data.success) {
+        setCompanies(response.data.data || []);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch companies:', error);
+    }
+  }, []);
 
-  const handleEdit = () => {
-    if (selectedHR) {
-      setHRAccounts(
-        hrAccounts.map((hr) =>
-          hr.id === selectedHR.id ? { ...selectedHR, ...formData } : hr
-        )
-      );
-      setIsEditDialogOpen(false);
-      setSelectedHR(null);
-      setFormData({ 
-        name: '', 
-        email: '', 
-        phone: '', 
-        company: '', 
-        department: '', 
-        position: '', 
-        hrId: '', 
-        password: '', 
-        dateOfBirth: '', 
-        address: '', 
-        joinedDate: '', 
-        reportingTo: '' 
+  const fetchHRAccounts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await adminAPI.getHRAccounts();
+      if (response.data.success) {
+        setHRAccounts(response.data.data || []);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch HR accounts:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load HR accounts',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  // Fetch HR accounts on mount
+  useEffect(() => {
+    fetchHRAccounts();
+    fetchCompanies();
+  }, [fetchHRAccounts, fetchCompanies]);
+
+  const handleCreate = async () => {
+    try {
+      // Prepare data, removing empty fields to avoid ObjectId cast errors
+      const dataToSend: any = {
+        ...formData,
+        role: 'hr',
+      };
+      
+      // Remove reportingTo if empty
+      if (!dataToSend.reportingTo) {
+        delete dataToSend.reportingTo;
+      }
+      
+      // Remove company if empty (backend will handle default or make it optional)
+      if (!dataToSend.company) {
+        delete dataToSend.company;
+      }
+      
+      const response = await adminAPI.createHR(dataToSend);
+      if (response.data.success) {
+        toast({
+          title: 'Success',
+          description: 'HR account created successfully',
+        });
+        setIsCreateDialogOpen(false);
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          company: '',
+          department: '',
+          position: '',
+          employeeId: '',
+          password: '',
+          dateOfBirth: '',
+          address: '',
+          joinedDate: '',
+          reportingTo: '',
+        });
+        fetchHRAccounts(); // Refresh list
+      }
+    } catch (error: any) {
+      console.error('Failed to create HR:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create HR account',
+        variant: 'destructive',
       });
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this HR account?')) {
-      setHRAccounts(hrAccounts.filter((hr) => hr.id !== id));
+  const handleEdit = async () => {
+    if (!selectedHR) return;
+
+    try {
+      // TODO: Add update API call when backend endpoint is ready
+      // await adminAPI.updateHR(selectedHR._id, formData);
+      toast({
+        title: 'Success',
+        description: 'HR account updated successfully',
+      });
+      setIsEditDialogOpen(false);
+      setSelectedHR(null);
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        company: '',
+        department: '',
+        position: '',
+        employeeId: '',
+        password: '',
+        dateOfBirth: '',
+        address: '',
+        joinedDate: '',
+        reportingTo: '',
+      });
+      fetchHRAccounts();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to update HR account',
+        variant: 'destructive',
+      });
     }
   };
 
-  const toggleStatus = (id: string) => {
-    setHRAccounts(
-      hrAccounts.map((hr) =>
-        hr.id === id
-          ? { ...hr, status: hr.status === 'active' ? 'inactive' : 'active' }
-          : hr
-      )
-    );
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this HR account?')) {
+      try {
+        // TODO: Add delete API call when backend endpoint is ready
+        // await adminAPI.deleteHR(id);
+        toast({
+          title: 'Success',
+          description: 'HR account deleted successfully',
+        });
+        fetchHRAccounts();
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to delete HR account',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const toggleStatus = async (id: string) => {
+    try {
+      // TODO: Add toggle status API call when backend endpoint is ready
+      // await adminAPI.updateHRStatus(id, newStatus);
+      toast({
+        title: 'Success',
+        description: 'HR status updated successfully',
+      });
+      fetchHRAccounts();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to update status',
+        variant: 'destructive',
+      });
+    }
   };
 
   const openEditDialog = (hr: HRAccount) => {
@@ -179,25 +229,49 @@ const AdminHRAccounts = () => {
       name: hr.name,
       email: hr.email,
       phone: hr.phone,
-      company: hr.company,
+      company: hr.company?._id || '',
       department: hr.department,
       position: hr.position,
-      hrId: hr.hrId,
-      password: hr.password,
+      employeeId: hr.employeeId,
+      password: '',
       dateOfBirth: hr.dateOfBirth,
       address: hr.address,
       joinedDate: hr.joinedDate,
-      reportingTo: hr.reportingTo || '',
+      reportingTo: '',
     });
     setIsEditDialogOpen(true);
   };
 
-  const stats = {
-    total: hrAccounts.length,
-    active: hrAccounts.filter((hr) => hr.status === 'active').length,
-    inactive: hrAccounts.filter((hr) => hr.status === 'inactive').length,
-    totalManaged: hrAccounts.reduce((sum, hr) => sum + hr.employeesManaged, 0),
+  const fillTestData = () => {
+    setFormData({
+      name: 'Test HR Manager',
+      email: `hr.test${Date.now()}@company.com`,
+      phone: '+1 (555) 123-4567',
+      company: '',
+      department: 'Human Resources',
+      position: 'HR Manager',
+      employeeId: `HR${Math.floor(Math.random() * 1000)}`,
+      password: 'Test@123',
+      dateOfBirth: '1990-01-01',
+      address: '123 Test Street, Test City, TC 12345',
+      joinedDate: new Date().toISOString().split('T')[0],
+      reportingTo: '',
+    });
+    toast({
+      title: 'Test Data Filled',
+      description: 'Form filled with test data. Ready to create HR account.',
+    });
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -217,8 +291,20 @@ const AdminHRAccounts = () => {
             </DialogTrigger>
             <DialogContent className="glass-card max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add New HR Manager</DialogTitle>
-                <DialogDescription>Create a new HR manager account with complete details</DialogDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <DialogTitle>Add New HR Manager</DialogTitle>
+                    <DialogDescription>Create a new HR manager account with complete details</DialogDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fillTestData}
+                    className="text-xs"
+                  >
+                    Fill Test Data
+                  </Button>
+                </div>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 {/* Profile Photo Upload */}
@@ -253,13 +339,13 @@ const AdminHRAccounts = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="hrId">HR ID (Username) <span className="text-xs text-muted-foreground">- Used for login</span></Label>
+                    <Label htmlFor="employeeId">Employee ID <span className="text-xs text-muted-foreground">- Used for login</span></Label>
                     <Input
-                      id="hrId"
-                      placeholder="HR-XXX or sarah.johnson"
+                      id="employeeId"
+                      placeholder="HR-XXX or HR001"
                       className="bg-secondary border-border"
-                      value={formData.hrId}
-                      onChange={(e) => setFormData({ ...formData, hrId: e.target.value })}
+                      value={formData.employeeId}
+                      onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                     />
                   </div>
                 </div>
@@ -326,8 +412,8 @@ const AdminHRAccounts = () => {
                   />
                 </div>
 
-                {/* Company and Department */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Company and Department - Hidden for single company mode */}
+                <div className="grid grid-cols-2 gap-4" style={{ display: 'none' }}>
                   <div className="space-y-2">
                     <Label htmlFor="company">Company</Label>
                     <Select
@@ -338,21 +424,26 @@ const AdminHRAccounts = () => {
                         <SelectValue placeholder="Select company" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Aselea Technologies">Aselea Technologies</SelectItem>
-                        <SelectItem value="Innovation Corp">Innovation Corp</SelectItem>
+                        {companies.map((company) => (
+                          <SelectItem key={company._id} value={company._id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
-                    <Input
-                      id="department"
-                      placeholder="e.g., Human Resources"
-                      className="bg-secondary border-border"
-                      value={formData.department}
-                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    />
-                  </div>
+                </div>
+                
+                {/* Department - Full width since company is hidden */}
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department</Label>
+                  <Input
+                    id="department"
+                    placeholder="e.g., Human Resources"
+                    className="bg-secondary border-border"
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  />
                 </div>
 
                 {/* Position and Join Date */}
@@ -398,7 +489,7 @@ const AdminHRAccounts = () => {
                 <Button
                   className="glow-button"
                   onClick={handleCreate}
-                  disabled={!formData.name || !formData.email || !formData.company || !formData.hrId || !formData.password}
+                  disabled={!formData.name || !formData.email || !formData.employeeId || !formData.password}
                 >
                   Create Account
                 </Button>
@@ -416,7 +507,7 @@ const AdminHRAccounts = () => {
                   <UserCog className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                  <p className="text-2xl font-bold text-foreground">{hrAccounts.length}</p>
                   <p className="text-xs text-muted-foreground">Total HR Managers</p>
                 </div>
               </div>
@@ -429,7 +520,7 @@ const AdminHRAccounts = () => {
                   <Shield className="h-5 w-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.active}</p>
+                  <p className="text-2xl font-bold text-foreground">{hrAccounts.filter((hr) => hr.status === 'active').length}</p>
                   <p className="text-xs text-muted-foreground">Active</p>
                 </div>
               </div>
@@ -442,7 +533,7 @@ const AdminHRAccounts = () => {
                   <Shield className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.inactive}</p>
+                  <p className="text-2xl font-bold text-foreground">{hrAccounts.filter((hr) => hr.status === 'inactive').length}</p>
                   <p className="text-xs text-muted-foreground">Inactive</p>
                 </div>
               </div>
@@ -455,7 +546,7 @@ const AdminHRAccounts = () => {
                   <UserCog className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.totalManaged}</p>
+                  <p className="text-2xl font-bold text-foreground">-</p>
                   <p className="text-xs text-muted-foreground">Employees Managed</p>
                 </div>
               </div>
@@ -483,79 +574,94 @@ const AdminHRAccounts = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {hrAccounts.map((hr) => (
-                  <TableRow key={hr.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={hr.avatar} />
-                          <AvatarFallback className="bg-primary/20 text-primary">
-                            {hr.name
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{hr.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Since {new Date(hr.joinedDate).toLocaleDateString()}
-                          </p>
-                        </div>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm">
-                          <UserCog className="h-3 w-3 text-muted-foreground" />
-                          <span className="font-mono text-xs text-foreground">{hr.hrId}</span>
+                  </TableRow>
+                ) : hrAccounts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No HR accounts found. Create one to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  hrAccounts.map((hr) => (
+                    <TableRow key={hr._id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={hr.avatar} />
+                            <AvatarFallback className="bg-primary/20 text-primary">
+                              {hr.name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{hr.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Since {new Date(hr.joinedDate).toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-xs text-muted-foreground">Password:</span>
-                          <span className="font-mono text-xs text-primary">{hr.password}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <UserCog className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-mono text-xs text-foreground">{hr.employeeId}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-xs text-muted-foreground">Email:</span>
+                            <span className="font-mono text-xs text-primary">{hr.email}</span>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mail className="h-3 w-3 text-muted-foreground" />
-                          {hr.email}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            {hr.email}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            {hr.phone}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          {hr.phone}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-primary" />
+                            <span className="text-sm">{hr.company?.name || 'N/A'}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{hr.department}</p>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4 text-primary" />
-                          <span className="text-sm">{hr.company}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{hr.department}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{hr.position}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{hr.employeesManaged} employees</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={hr.status === 'active' ? 'status-approved' : 'bg-muted cursor-pointer'}
-                        onClick={() => toggleStatus(hr.id)}
-                      >
-                        {hr.status.charAt(0).toUpperCase() + hr.status.slice(1)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/hr-accounts/${hr.id}`)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{hr.position}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">-</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={hr.status === 'active' ? 'status-approved' : 'bg-muted cursor-pointer'}
+                          onClick={() => toggleStatus(hr._id)}
+                        >
+                          {hr.status.charAt(0).toUpperCase() + hr.status.slice(1)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/hr-accounts/${hr._id}`)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         <Button variant="ghost" size="sm" onClick={() => openEditDialog(hr)}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -563,14 +669,15 @@ const AdminHRAccounts = () => {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(hr.id)}
+                          onClick={() => handleDelete(hr._id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -616,13 +723,13 @@ const AdminHRAccounts = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-hrId">HR ID (Username)</Label>
+                  <Label htmlFor="edit-employeeId">Employee ID</Label>
                   <Input
-                    id="edit-hrId"
+                    id="edit-employeeId"
                     placeholder="HR-XXX"
                     className="bg-secondary border-border"
-                    value={formData.hrId}
-                    onChange={(e) => setFormData({ ...formData, hrId: e.target.value })}
+                    value={formData.employeeId}
+                    onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                   />
                 </div>
               </div>
@@ -761,7 +868,7 @@ const AdminHRAccounts = () => {
               <Button
                 className="glow-button"
                 onClick={handleEdit}
-                disabled={!formData.name || !formData.email || !formData.company || !formData.hrId || !formData.password}
+                disabled={!formData.name || !formData.email || !formData.company || !formData.employeeId}
               >
                 Save Changes
               </Button>

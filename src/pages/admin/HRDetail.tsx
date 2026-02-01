@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { adminAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft,
   User,
@@ -22,6 +24,7 @@ import {
   Edit,
   Building2,
   Users,
+  Loader2,
 } from 'lucide-react';
 
 // Section type for navigation
@@ -29,67 +32,67 @@ type Section = 'overview' | 'employees' | 'tasks' | 'chat';
 
 // HR Account interface
 interface HRAccount {
-  id: string;
+  _id: string;
   name: string;
   email: string;
   phone: string;
-  company: string;
+  company?: { name: string; _id: string };
   department: string;
   position: string;
   status: 'active' | 'inactive';
-  employeesManaged: number;
   joinedDate: string;
   avatar?: string;
-  password: string;
   dateOfBirth: string;
   address: string;
-  hrId: string;
+  employeeId: string;
   reportingTo?: string;
 }
-
-// Mock data - matches AdminHRAccounts.tsx
-const hrAccounts: HRAccount[] = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    email: 'sarah.j@aselea.com',
-    phone: '+1 (555) 111-2222',
-    company: 'Aselea Technologies',
-    department: 'Human Resources',
-    position: 'HR Manager',
-    status: 'active',
-    employeesManaged: 45,
-    joinedDate: '2024-03-15',
-    password: 'hr123',
-    dateOfBirth: '1985-03-15',
-    address: '123 HR Street, City, State 12345',
-    hrId: 'HR-001',
-  },
-  {
-    id: '2',
-    name: 'Michael Chen',
-    email: 'michael.c@innovation.com',
-    phone: '+1 (555) 333-4444',
-    company: 'Innovation Corp',
-    department: 'HR Operations',
-    position: 'Senior HR Manager',
-    status: 'active',
-    employeesManaged: 32,
-    joinedDate: '2024-07-20',
-    password: 'michael456',
-    dateOfBirth: '1987-07-20',
-    address: '456 HR Avenue, City, State 23456',
-    hrId: 'HR-002',
-  },
-];
 
 const HRDetail = () => {
   const { hrId } = useParams<{ hrId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [activeSection, setActiveSection] = useState<Section>('overview');
+  const [hrAccount, setHrAccount] = useState<HRAccount | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Find HR account by ID
-  const hrAccount = hrAccounts.find(hr => hr.id === hrId);
+  useEffect(() => {
+    const fetchHRDetail = async () => {
+      if (!hrId) return;
+      
+      try {
+        setLoading(true);
+        const response = await adminAPI.getHRDetail(hrId);
+        if (response.data.success) {
+          setHrAccount(response.data.data);
+        }
+      } catch (error: any) {
+        console.error('Failed to fetch HR details:', error);
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to load HR details',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHRDetail();
+  }, [hrId, toast]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Find HR account by ID - now using state from API
 
   // If HR account not found, show error state
   if (!hrAccount) {
@@ -176,7 +179,7 @@ const HRDetail = () => {
                       {getStatusText(hrAccount.status)}
                     </Badge>
                     <Badge variant="outline" className="font-mono text-xs justify-center">
-                      {hrAccount.hrId}
+                      {hrAccount.employeeId}
                     </Badge>
                   </div>
                 </div>
@@ -191,7 +194,7 @@ const HRDetail = () => {
                     <Users className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-foreground">{hrAccount.employeesManaged}</p>
+                    <p className="text-2xl font-bold text-foreground">-</p>
                     <p className="text-xs text-muted-foreground">Employees Managed</p>
                   </div>
                 </div>
@@ -335,7 +338,7 @@ const HRDetail = () => {
                           <span className="text-sm">HR ID</span>
                         </div>
                         <span className="text-sm font-medium text-foreground text-right font-mono">
-                          {hrAccount.hrId}
+                          {hrAccount.employeeId}
                         </span>
                       </div>
                       <Separator className="bg-border/50" />
@@ -344,7 +347,7 @@ const HRDetail = () => {
                           <Building2 className="h-4 w-4" />
                           <span className="text-sm">Company</span>
                         </div>
-                        <span className="text-sm font-medium text-foreground text-right">{hrAccount.company}</span>
+                        <span className="text-sm font-medium text-foreground text-right">{hrAccount.company?.name || 'N/A'}</span>
                       </div>
                       <Separator className="bg-border/50" />
                       <div className="flex items-start justify-between py-3">
@@ -380,16 +383,6 @@ const HRDetail = () => {
                           {hrAccount.reportingTo || 'Not assigned'}
                         </span>
                       </div>
-                      <Separator className="bg-border/50" />
-                      <div className="flex items-start justify-between py-3">
-                        <div className="flex items-center gap-3 text-muted-foreground">
-                          <Users className="h-4 w-4" />
-                          <span className="text-sm">Employees Managed</span>
-                        </div>
-                        <span className="text-sm font-medium text-foreground text-right">
-                          {hrAccount.employeesManaged} employees
-                        </span>
-                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -410,25 +403,17 @@ const HRDetail = () => {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <UserCog className="h-4 w-4" />
-                          <span className="text-sm">Username</span>
-                        </div>
-                        <div className="bg-muted/50 px-4 py-3 rounded-lg font-mono text-sm font-medium">
-                          {hrAccount.hrId}
-                        </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <UserCog className="h-4 w-4" />
+                        <span className="text-sm">Employee ID (Username)</span>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Key className="h-4 w-4" />
-                          <span className="text-sm">Password</span>
-                        </div>
-                        <div className="bg-muted/50 px-4 py-3 rounded-lg font-mono text-sm font-medium">
-                          {hrAccount.password}
-                        </div>
+                      <div className="bg-muted/50 px-4 py-3 rounded-lg font-mono text-sm font-medium">
+                        {hrAccount.employeeId}
                       </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Use this Employee ID as username to login to the system
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -449,7 +434,7 @@ const HRDetail = () => {
                   <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                   <h3 className="text-xl font-semibold mb-2">Employee Management</h3>
                   <p className="text-muted-foreground">
-                    List of {hrAccount.employeesManaged} employees managed by {hrAccount.name} will be displayed here.
+                    Employees managed by {hrAccount.name} will be displayed here.
                   </p>
                 </CardContent>
               </Card>

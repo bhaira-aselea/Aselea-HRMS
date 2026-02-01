@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,44 +16,62 @@ import {
   Phone,
   Eye,
   Building2,
+  Loader2,
 } from 'lucide-react';
+import { adminAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface Employee {
-  id: string;
+  _id: string;
   name: string;
   email: string;
-  phone: string;
-  company: string;
-  department: string;
-  position: string;
-  joinDate: string;
+  phone?: string;
+  company?: { name: string; _id: string };
+  department?: string;
+  position?: string;
+  joinDate?: string;
   status: 'active' | 'on-leave' | 'inactive';
   employeeId: string;
   profilePhoto?: string;
 }
 
-const employees: Employee[] = [
-  { id: '1', name: 'John Doe', email: 'john.doe@aselea.com', phone: '+1 (555) 123-4567', company: 'Aselea Technologies', department: 'Engineering', position: 'Senior Developer', joinDate: '2022-03-15', status: 'active', employeeId: 'EMP-001' },
-  { id: '2', name: 'Jane Smith', email: 'jane.smith@aselea.com', phone: '+1 (555) 234-5678', company: 'Aselea Technologies', department: 'Marketing', position: 'Marketing Manager', joinDate: '2021-06-20', status: 'active', employeeId: 'EMP-002' },
-  { id: '3', name: 'Mike Johnson', email: 'mike.j@innovation.com', phone: '+1 (555) 345-6789', company: 'Innovation Corp', department: 'Sales', position: 'Sales Executive', joinDate: '2023-01-10', status: 'on-leave', employeeId: 'EMP-003' },
-  { id: '4', name: 'Sarah Wilson', email: 'sarah.w@aselea.com', phone: '+1 (555) 456-7890', company: 'Aselea Technologies', department: 'HR', position: 'HR Specialist', joinDate: '2020-09-05', status: 'active', employeeId: 'EMP-004' },
-  { id: '5', name: 'Tom Brown', email: 'tom.brown@innovation.com', phone: '+1 (555) 567-8901', company: 'Innovation Corp', department: 'Engineering', position: 'Frontend Developer', joinDate: '2023-02-14', status: 'active', employeeId: 'EMP-005' },
-  { id: '6', name: 'Emily Davis', email: 'emily.d@aselea.com', phone: '+1 (555) 678-9012', company: 'Aselea Technologies', department: 'Finance', position: 'Accountant', joinDate: '2022-11-20', status: 'active', employeeId: 'EMP-006' },
-];
-
 const AdminEmployees = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await adminAPI.getEmployees();
+      setEmployees(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch employees:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch employees',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = 
       emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.employeeId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCompany = companyFilter === 'all' || emp.company === companyFilter;
+    const matchesCompany = companyFilter === 'all' || emp.company?.name === companyFilter;
     const matchesDepartment = departmentFilter === 'all' || emp.department === departmentFilter;
     const matchesStatus = statusFilter === 'all' || emp.status === statusFilter;
     return matchesSearch && matchesCompany && matchesDepartment && matchesStatus;
@@ -215,8 +233,21 @@ const AdminEmployees = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEmployees.map((employee) => (
-                  <TableRow key={employee.id} className="hover:bg-primary/5">
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredEmployees.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No employees found matching the filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredEmployees.map((employee) => (
+                  <TableRow key={employee._id} className="hover:bg-primary/5">
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar>
@@ -237,19 +268,21 @@ const AdminEmployees = () => {
                           <Mail className="h-3 w-3 text-muted-foreground" />
                           {employee.email}
                         </div>
+                        {employee.phone && (
                         <div className="flex items-center gap-2 text-sm">
                           <Phone className="h-3 w-3 text-muted-foreground" />
                           {employee.phone}
                         </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-primary" />
-                        {employee.company}
+                        {employee.company?.name || 'N/A'}
                       </div>
                     </TableCell>
-                    <TableCell>{employee.department}</TableCell>
+                    <TableCell>{employee.department || 'N/A'}</TableCell>
                     <TableCell>{employee.position}</TableCell>
                     <TableCell>{new Date(employee.joinDate).toLocaleDateString()}</TableCell>
                     <TableCell>{getStatusBadge(employee.status)}</TableCell>
@@ -257,14 +290,15 @@ const AdminEmployees = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate(`/admin/employees/${employee.id}`)}
+                        onClick={() => navigate(`/admin/employees/${employee._id}`)}
                       >
                         <Eye className="h-4 w-4 mr-2" />
                         View
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+                )}
               </TableBody>
             </Table>
           </CardContent>

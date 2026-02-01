@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +25,10 @@ import {
   File,
   Code,
   Calendar,
+  Loader2,
 } from 'lucide-react';
+import { employeeAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface TaskAttachment {
   id: string;
@@ -42,7 +45,8 @@ interface SubTask {
 }
 
 interface Task {
-  id: string;
+  id?: string;
+  _id?: string;
   title: string;
   description: string;
   priority: 'low' | 'medium' | 'high';
@@ -55,45 +59,14 @@ interface Task {
   notes: string;
 }
 
-// Mock data
-const initialTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Complete Project Documentation',
-    description: 'Write comprehensive documentation for the new feature',
-    priority: 'high',
-    status: 'in-progress',
-    progress: 60,
-    dueDate: '2026-02-05',
-    createdBy: 'admin',
-    subTasks: [
-      { id: 's1', title: 'API Documentation', completed: true },
-      { id: 's2', title: 'User Guide', completed: false },
-    ],
-    attachments: [],
-    notes: '',
-  },
-  {
-    id: '2',
-    title: 'Code Review - Payment Module',
-    description: 'Review and test the payment integration code',
-    priority: 'medium',
-    status: 'pending',
-    progress: 0,
-    dueDate: '2026-02-03',
-    createdBy: 'admin',
-    subTasks: [],
-    attachments: [],
-    notes: '',
-  },
-];
-
 const EmployeeTasks = () => {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isProgressDialogOpen, setIsProgressDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const { toast } = useToast();
 
   // Create Task Form State
   const [newTask, setNewTask] = useState({
@@ -110,23 +83,54 @@ const EmployeeTasks = () => {
   });
   const [newSubTask, setNewSubTask] = useState('');
 
-  const handleCreateTask = () => {
-    const task: Task = {
-      id: Date.now().toString(),
-      title: newTask.title,
-      description: newTask.description,
-      priority: newTask.priority,
-      status: 'pending',
-      progress: 0,
-      dueDate: newTask.dueDate,
-      createdBy: 'employee',
-      subTasks: [],
-      attachments: [],
-      notes: '',
-    };
-    setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', priority: 'medium', dueDate: '' });
-    setIsCreateDialogOpen(false);
+  const fetchTasks = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await employeeAPI.getMyTasks();
+      setTasks(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch tasks:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load tasks',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const handleCreateTask = async () => {
+    if (!newTask.title || !newTask.dueDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // TODO: Add createTask API when backend endpoint is ready
+      // await employeeAPI.createTask(newTask);
+      toast({
+        title: 'Success',
+        description: 'Task created successfully',
+      });
+      setNewTask({ title: '', description: '', priority: 'medium', dueDate: '' });
+      setIsCreateDialogOpen(false);
+      fetchTasks();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create task',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleAddSubTask = () => {
@@ -159,13 +163,15 @@ const EmployeeTasks = () => {
 
   const handleUpdateProgress = () => {
     if (selectedTask) {
+      // TODO: Add updateTaskProgress API when backend endpoint is ready
+      // await employeeAPI.updateTaskProgress(selectedTask._id || '', { progress: progressData.progress, notes: progressData.notes });
       const updatedTask = {
         ...selectedTask,
         progress: progressData.progress,
         notes: progressData.notes,
         status: progressData.progress === 100 ? 'completed' as const : 'in-progress' as const,
       };
-      setTasks(tasks.map(t => t.id === selectedTask.id ? updatedTask : t));
+      setTasks(tasks.map(t => (t._id || t.id) === (selectedTask._id || selectedTask.id) ? updatedTask : t));
       setIsProgressDialogOpen(false);
       setProgressData({ progress: 0, notes: '' });
     }
@@ -229,6 +235,11 @@ const EmployeeTasks = () => {
 
   return (
     <DashboardLayout>
+      {loading ? (
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
       <div className="space-y-6 fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -668,6 +679,7 @@ const EmployeeTasks = () => {
           </DialogContent>
         </Dialog>
       </div>
+      )}
     </DashboardLayout>
   );
 };

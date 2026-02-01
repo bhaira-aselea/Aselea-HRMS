@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,28 +16,61 @@ import {
   CheckCircle,
   XCircle,
   Clock3,
+  Loader2,
 } from 'lucide-react';
-
-const pendingLeaves = [
-  { id: 1, name: 'John Doe', type: 'Sick Leave', days: 2, from: 'Feb 1', to: 'Feb 2' },
-  { id: 2, name: 'Jane Smith', type: 'Casual Leave', days: 1, from: 'Feb 3', to: 'Feb 3' },
-  { id: 3, name: 'Mike Johnson', type: 'Annual Leave', days: 5, from: 'Feb 10', to: 'Feb 14' },
-];
-
-const pendingExpenses = [
-  { id: 1, name: 'Sarah Wilson', amount: 245, description: 'Client lunch meeting', date: 'Jan 28' },
-  { id: 2, name: 'Tom Brown', amount: 120, description: 'Office supplies', date: 'Jan 29' },
-  { id: 3, name: 'Emily Davis', amount: 380, description: 'Travel reimbursement', date: 'Jan 30' },
-];
-
-const todayAttendance = [
-  { id: 1, name: 'John Doe', status: 'present', punchIn: '09:00 AM', punchOut: '-' },
-  { id: 2, name: 'Jane Smith', status: 'present', punchIn: '08:45 AM', punchOut: '-' },
-  { id: 3, name: 'Mike Johnson', status: 'late', punchIn: '10:15 AM', punchOut: '-' },
-  { id: 4, name: 'Sarah Wilson', status: 'absent', punchIn: '-', punchOut: '-' },
-];
+import { hrAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 const HRDashboard = () => {
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
+  const [pendingExpenses, setPendingExpenses] = useState<any[]>([]);
+  const [todayAttendance, setTodayAttendance] = useState<any[]>([]);
+  const { toast } = useToast();
+
+  const fetchDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [dashboardRes, leavesRes, expensesRes, attendanceRes] = await Promise.all([
+        hrAPI.getDashboard(),
+        hrAPI.getPendingLeaves(),
+        hrAPI.getPendingExpenses(),
+        hrAPI.getTodayAttendance(),
+      ]);
+      setDashboardData(dashboardRes.data.data);
+      setPendingLeaves(Array.isArray(leavesRes.data.data) ? leavesRes.data.data : []);
+      setPendingExpenses(Array.isArray(expensesRes.data.data) ? expensesRes.data.data : []);
+      setTodayAttendance(Array.isArray(attendanceRes.data.data) ? attendanceRes.data.data : []);
+    } catch (error: any) {
+      console.error('Failed to fetch dashboard:', error);
+      // Set empty arrays on error
+      setPendingLeaves([]);
+      setPendingExpenses([]);
+      setTodayAttendance([]);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load dashboard',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
   return (
     <DashboardLayout>
       <div className="space-y-6 fade-in">
@@ -44,27 +78,26 @@ const HRDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatsCard
             title="Total Employees"
-            value={86}
+            value={dashboardData?.stats?.totalEmployees || 0}
             icon={UserCircle}
-            trend={{ value: 4, isPositive: true }}
             className="stagger-1"
           />
           <StatsCard
             title="Present Today"
-            value={72}
+            value={dashboardData?.stats?.presentToday || 0}
             icon={Clock}
-            suffix="/86"
+            suffix={`/${dashboardData?.stats?.totalEmployees || 0}`}
             className="stagger-2"
           />
           <StatsCard
             title="Pending Leaves"
-            value={8}
+            value={dashboardData?.stats?.pendingLeaves || 0}
             icon={CalendarCheck}
             className="stagger-3"
           />
           <StatsCard
             title="Active Tasks"
-            value={34}
+            value={dashboardData?.stats?.activeTasks || 0}
             icon={ClipboardList}
             className="stagger-4"
           />
@@ -192,7 +225,8 @@ const HRDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {todayAttendance.map((emp) => (
+              {todayAttendance && todayAttendance.length > 0 ? (
+                todayAttendance.map((emp) => (
                 <div
                   key={emp.id}
                   className="p-4 rounded-lg bg-secondary/50 border border-border"
@@ -221,7 +255,12 @@ const HRDashboard = () => {
                     <span>Out: {emp.punchOut}</span>
                   </div>
                 </div>
-              ))}
+              ))
+              ) : (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  No attendance records for today
+                </div>
+              )}
             </div>
 
             {/* Attendance Summary */}

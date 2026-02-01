@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,22 +15,66 @@ import {
   TrendingUp,
   AlertCircle,
 } from 'lucide-react';
-
-const recentActivities = [
-  { id: 1, action: 'New employee onboarded', user: 'HR Team', time: '2 min ago', type: 'success' },
-  { id: 2, action: 'Leave request approved', user: 'John Doe', time: '15 min ago', type: 'info' },
-  { id: 3, action: 'Expense claim submitted', user: 'Jane Smith', time: '1 hour ago', type: 'warning' },
-  { id: 4, action: 'Task completed', user: 'Mike Johnson', time: '2 hours ago', type: 'success' },
-  { id: 5, action: 'Attendance anomaly detected', user: 'System', time: '3 hours ago', type: 'error' },
-];
-
-const systemAlerts = [
-  { id: 1, message: '5 pending leave requests require approval', priority: 'high' },
-  { id: 2, message: '12 expense claims awaiting review', priority: 'medium' },
-  { id: 3, message: 'Monthly attendance report ready', priority: 'low' },
-];
+import { adminAPI } from '@/lib/apiClient';
 
 const AdminDashboard = () => {
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [activityData, setActivityData] = useState<any[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const [dashboardRes, activityRes] = await Promise.all([
+          adminAPI.getDashboard(),
+          adminAPI.getActivity(),
+        ]);
+
+        if (dashboardRes.data.success) {
+          setDashboardData(dashboardRes.data.data);
+        }
+        if (activityRes.data.success) {
+          setActivityData(activityRes.data.data || []);
+        }
+      } catch (err: any) {
+        console.error('Failed to fetch dashboard data:', err);
+        setError(err.response?.data?.message || 'Failed to load dashboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <p className="text-destructive">{error}</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const stats = dashboardData?.stats || {};
+  const alerts = dashboardData?.alerts || [];
+
   return (
     <DashboardLayout>
       <div className="space-y-6 fade-in">
@@ -37,30 +82,30 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatsCard
             title="Total Companies"
-            value={12}
+            value={stats.totalCompanies || 0}
             icon={Building2}
-            trend={{ value: 8, isPositive: true }}
+            trend={{ value: stats.companiesGrowth || 0, isPositive: (stats.companiesGrowth || 0) >= 0 }}
             className="stagger-1"
           />
           <StatsCard
             title="HR Managers"
-            value={24}
+            value={stats.totalHR || 0}
             icon={Users}
-            trend={{ value: 12, isPositive: true }}
+            trend={{ value: stats.hrGrowth || 0, isPositive: (stats.hrGrowth || 0) >= 0 }}
             className="stagger-2"
           />
           <StatsCard
             title="Total Employees"
-            value={458}
+            value={stats.totalEmployees || 0}
             icon={UserCircle}
-            trend={{ value: 5, isPositive: true }}
+            trend={{ value: stats.employeesGrowth || 0, isPositive: (stats.employeesGrowth || 0) >= 0 }}
             className="stagger-3"
           />
           <StatsCard
             title="Active Today"
-            value={312}
+            value={stats.activeToday || 0}
             icon={Clock}
-            suffix="/458"
+            suffix={`/${stats.totalEmployees || 0}`}
             className="stagger-4"
           />
         </div>
@@ -69,19 +114,19 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatsCard
             title="Pending Leaves"
-            value={23}
+            value={stats.pendingLeaves || 0}
             icon={CalendarCheck}
             className="stagger-5"
           />
           <StatsCard
             title="Active Tasks"
-            value={89}
+            value={stats.activeTasks || 0}
             icon={ClipboardList}
             className="stagger-6"
           />
           <StatsCard
             title="Pending Expenses"
-            value={34}
+            value={stats.pendingExpenses || 0}
             icon={Receipt}
             prefix="$"
             className="stagger-6"
@@ -100,23 +145,29 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-start gap-4 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                  >
-                    <div className={`w-2 h-2 mt-2 rounded-full ${
-                      activity.type === 'success' ? 'bg-success' :
-                      activity.type === 'error' ? 'bg-destructive' :
-                      activity.type === 'warning' ? 'bg-warning' : 'bg-primary'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">{activity.action}</p>
-                      <p className="text-xs text-muted-foreground">{activity.user}</p>
+                {activityData.length > 0 ? (
+                  activityData.slice(0, 5).map((activity: any, index: number) => (
+                    <div
+                      key={activity._id || index}
+                      className="flex items-start gap-4 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      <div className={`w-2 h-2 mt-2 rounded-full ${
+                        activity.type === 'success' ? 'bg-success' :
+                        activity.type === 'error' ? 'bg-destructive' :
+                        activity.type === 'warning' ? 'bg-warning' : 'bg-primary'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">{activity.action || activity.description}</p>
+                        <p className="text-xs text-muted-foreground">{activity.user || activity.userName}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {activity.time || new Date(activity.createdAt).toLocaleTimeString()}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.time}</span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">No recent activity</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -132,25 +183,29 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {systemAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="flex items-center gap-4 p-4 rounded-lg border border-border bg-secondary/30"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm text-foreground">{alert.message}</p>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        alert.priority === 'high' ? 'status-rejected' :
-                        alert.priority === 'medium' ? 'status-pending' : 'status-approved'
-                      }
+                {alerts.length > 0 ? (
+                  alerts.map((alert: any, index: number) => (
+                    <div
+                      key={alert._id || index}
+                      className="flex items-center gap-4 p-4 rounded-lg border border-border bg-secondary/30"
                     >
-                      {alert.priority}
-                    </Badge>
-                  </div>
-                ))}
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground">{alert.message}</p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={
+                          alert.priority === 'high' ? 'status-rejected' :
+                          alert.priority === 'medium' ? 'status-pending' : 'status-approved'
+                        }
+                      >
+                        {alert.priority}
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">No alerts</p>
+                )}
               </div>
 
               {/* System Health */}

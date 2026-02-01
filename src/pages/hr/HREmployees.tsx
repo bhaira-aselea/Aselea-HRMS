@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,40 +24,76 @@ import {
   Trash2,
   Download,
   Upload,
+  Loader2,
 } from 'lucide-react';
+import { hrAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface Employee {
-  id: string;
+  _id: string;
   name: string;
   email: string;
-  phone: string;
-  department: string;
-  position: string;
-  joinDate: string;
+  phone?: string;
+  department?: string;
+  position?: string;
+  joinDate?: string;
   status: 'active' | 'on-leave' | 'inactive';
   employeeId: string;
-  password: string;
-  dateOfBirth: string;
-  address: string;
+  dateOfBirth?: string;
+  address?: string;
   profilePhoto?: string;
-  reportingTo?: string;
 }
-
-const employees: Employee[] = [
-  { id: '1', name: 'John Doe', email: 'john.doe@company.com', phone: '+1 (555) 123-4567', department: 'Engineering', position: 'Senior Developer', joinDate: '2022-03-15', status: 'active', employeeId: 'EMP-001', password: 'pass123', dateOfBirth: '1990-05-15', address: '123 Main St, City, State 12345' },
-  { id: '2', name: 'Jane Smith', email: 'jane.smith@company.com', phone: '+1 (555) 234-5678', department: 'Marketing', position: 'Marketing Manager', joinDate: '2021-06-20', status: 'active', employeeId: 'EMP-002', password: 'welcome456', dateOfBirth: '1988-08-22', address: '456 Oak Ave, City, State 23456' },
-  { id: '3', name: 'Mike Johnson', email: 'mike.j@company.com', phone: '+1 (555) 345-6789', department: 'Sales', position: 'Sales Executive', joinDate: '2023-01-10', status: 'on-leave', employeeId: 'EMP-003', password: 'mike2023', dateOfBirth: '1992-03-10', address: '789 Pine Rd, City, State 34567' },
-  { id: '4', name: 'Sarah Wilson', email: 'sarah.w@company.com', phone: '+1 (555) 456-7890', department: 'HR', position: 'HR Specialist', joinDate: '2020-09-05', status: 'active', employeeId: 'EMP-004', password: 'sarah789', dateOfBirth: '1991-11-30', address: '321 Elm St, City, State 45678' },
-  { id: '5', name: 'Tom Brown', email: 'tom.brown@company.com', phone: '+1 (555) 567-8901', department: 'Engineering', position: 'Frontend Developer', joinDate: '2023-02-14', status: 'active', employeeId: 'EMP-005', password: 'tom2024', dateOfBirth: '1993-07-18', address: '654 Maple Dr, City, State 56789' },
-  { id: '6', name: 'Emily Davis', email: 'emily.d@company.com', phone: '+1 (555) 678-9012', department: 'Finance', position: 'Accountant', joinDate: '2022-11-20', status: 'active', employeeId: 'EMP-006', password: 'emily321', dateOfBirth: '1989-12-05', address: '987 Cedar Ln, City, State 67890' },
-];
 
 const HREmployees = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<any>({});
+
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await hrAPI.getEmployees();
+      setEmployees(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch employees:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load employees',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
+
+  const handleCreateEmployee = async () => {
+    try {
+      await hrAPI.createEmployee(formData);
+      toast({
+        title: 'Success',
+        description: 'Employee created successfully',
+      });
+      setIsAddDialogOpen(false);
+      setFormData({});
+      fetchEmployees();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create employee',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = 
@@ -330,7 +366,7 @@ const HREmployees = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredEmployees.map((employee) => (
-                    <TableRow key={employee.id} className="hover:bg-secondary/30">
+                    <TableRow key={employee._id} className="hover:bg-secondary/30">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar>
@@ -351,8 +387,8 @@ const HREmployees = () => {
                             <span className="font-mono text-xs text-foreground">{employee.employeeId}</span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="text-xs text-muted-foreground">Password:</span>
-                            <span className="font-mono text-xs text-primary">{employee.password}</span>
+                            <span className="text-xs text-muted-foreground">Email:</span>
+                            <span className="font-mono text-xs text-primary">{employee.email}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -381,7 +417,7 @@ const HREmployees = () => {
                       <TableCell>{getStatusBadge(employee.status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => navigate(`/hr/employees/${employee.id}`)}>
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/hr/employees/${employee._id}`)}>
                             <Eye className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="sm">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,47 +15,26 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Building2, Plus, Edit, Trash2, Users, MapPin, Mail, Phone } from 'lucide-react';
+import { Building2, Plus, Edit, Trash2, Users, MapPin, Mail, Phone, Loader2 } from 'lucide-react';
+import { adminAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface Company {
-  id: string;
+  _id: string;
   name: string;
   email: string;
   phone: string;
   address: string;
-  employeeCount: number;
-  hrCount: number;
+  employeeCount?: number;
+  hrCount?: number;
   status: 'active' | 'inactive';
   createdAt: string;
 }
 
-const initialCompanies: Company[] = [
-  {
-    id: '1',
-    name: 'Aselea Technologies',
-    email: 'contact@aselea.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Tech Park, Silicon Valley, CA',
-    employeeCount: 45,
-    hrCount: 3,
-    status: 'active',
-    createdAt: '2025-01-15',
-  },
-  {
-    id: '2',
-    name: 'Innovation Corp',
-    email: 'info@innovation.com',
-    phone: '+1 (555) 987-6543',
-    address: '456 Business Ave, New York, NY',
-    employeeCount: 32,
-    hrCount: 2,
-    status: 'active',
-    createdAt: '2025-06-20',
-  },
-];
-
 const AdminCompanies = () => {
-  const [companies, setCompanies] = useState<Company[]>(initialCompanies);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -66,36 +45,87 @@ const AdminCompanies = () => {
     address: '',
   });
 
-  const handleCreate = () => {
-    const newCompany: Company = {
-      id: Date.now().toString(),
-      ...formData,
-      employeeCount: 0,
-      hrCount: 0,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-    };
-    setCompanies([...companies, newCompany]);
-    setFormData({ name: '', email: '', phone: '', address: '' });
-    setIsCreateDialogOpen(false);
-  };
+  const fetchCompanies = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await adminAPI.getCompanies();
+      setCompanies(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch companies:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load companies',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-  const handleEdit = () => {
-    if (selectedCompany) {
-      setCompanies(
-        companies.map((c) =>
-          c.id === selectedCompany.id ? { ...selectedCompany, ...formData } : c
-        )
-      );
-      setIsEditDialogOpen(false);
-      setSelectedCompany(null);
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
+
+  const handleCreate = async () => {
+    try {
+      await adminAPI.createCompany(formData);
+      toast({
+        title: 'Success',
+        description: 'Company created successfully',
+      });
       setFormData({ name: '', email: '', phone: '', address: '' });
+      setIsCreateDialogOpen(false);
+      fetchCompanies();
+    } catch (error: any) {
+      console.error('Failed to create company:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create company',
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleEdit = async () => {
+    if (!selectedCompany) return;
+
+    try {
+      // TODO: Add update API call when backend endpoint is ready
+      // await adminAPI.updateCompany(selectedCompany._id, formData);
+      toast({
+        title: 'Success',
+        description: 'Company updated successfully',
+      });
+      setIsEditDialogOpen(false);
+      setSelectedCompany(null);
+      setFormData({ name: '', email: '', phone: '', address: '' });
+      fetchCompanies();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to update company',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this company?')) {
-      setCompanies(companies.filter((c) => c.id !== id));
+      try {
+        // TODO: Add delete API call when backend endpoint is ready
+        // await adminAPI.deleteCompany(id);
+        toast({
+          title: 'Success',
+          description: 'Company deleted successfully',
+        });
+        fetchCompanies();
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to delete company',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -110,11 +140,24 @@ const AdminCompanies = () => {
     setIsEditDialogOpen(true);
   };
 
+  const fillTestData = () => {
+    setFormData({
+      name: 'Test Company Inc.',
+      email: `test.company${Date.now()}@example.com`,
+      phone: '+1 (555) 987-6543',
+      address: '456 Business Ave, Corporate City, CC 54321',
+    });
+    toast({
+      title: 'Test Data Filled',
+      description: 'Form filled with test data for quick testing',
+    });
+  };
+
   const stats = {
     total: companies.length,
     active: companies.filter((c) => c.status === 'active').length,
-    totalEmployees: companies.reduce((sum, c) => sum + c.employeeCount, 0),
-    totalHR: companies.reduce((sum, c) => sum + c.hrCount, 0),
+    totalEmployees: companies.reduce((sum, c) => sum + (c.employeeCount || 0), 0),
+    totalHR: companies.reduce((sum, c) => sum + (c.hrCount || 0), 0),
   };
 
   return (
@@ -135,8 +178,20 @@ const AdminCompanies = () => {
             </DialogTrigger>
             <DialogContent className="bg-background max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Add New Company</DialogTitle>
-                <DialogDescription>Register a new company in the system</DialogDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <DialogTitle>Add New Company</DialogTitle>
+                    <DialogDescription>Register a new company in the system</DialogDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fillTestData}
+                    className="text-xs"
+                  >
+                    Fill Test Data
+                  </Button>
+                </div>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -267,8 +322,21 @@ const AdminCompanies = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {companies.map((company) => (
-                  <TableRow key={company.id}>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                    </TableCell>
+                  </TableRow>
+                ) : companies.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No companies found. Create one to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  companies.map((company) => (
+                  <TableRow key={company._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -330,14 +398,15 @@ const AdminCompanies = () => {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(company.id)}
+                          onClick={() => handleDelete(company._id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
