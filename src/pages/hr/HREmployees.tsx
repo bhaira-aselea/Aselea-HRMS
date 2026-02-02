@@ -53,7 +53,40 @@ const HREmployees = () => {
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [formData, setFormData] = useState<any>({});
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [formData, setFormData] = useState<any>({
+    name: '',
+    employeeId: '',
+    email: '',
+    phone: '',
+    password: '',
+    department: '',
+    position: '',
+    joinDate: '',
+    dateOfBirth: '',
+    address: '',
+  });
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+          title: 'File too large',
+          description: 'Please select a photo under 5MB',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setSelectedPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -78,13 +111,49 @@ const HREmployees = () => {
 
   const handleCreateEmployee = async () => {
     try {
-      await hrAPI.createEmployee(formData);
+      // Validate required fields
+      if (!formData.name || !formData.employeeId || !formData.email || !formData.password) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please fill in all required fields (Name, Employee ID, Email, Password)',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Create FormData for file upload
+      const submitData = new FormData();
+      Object.keys(formData).forEach(key => {
+        if (formData[key]) {
+          submitData.append(key, formData[key]);
+        }
+      });
+      
+      // Add photo if selected
+      if (selectedPhoto) {
+        submitData.append('profilePhoto', selectedPhoto);
+      }
+
+      await hrAPI.createEmployee(submitData);
       toast({
         title: 'Success',
         description: 'Employee created successfully',
       });
       setIsAddDialogOpen(false);
-      setFormData({});
+      setFormData({
+        name: '',
+        employeeId: '',
+        email: '',
+        phone: '',
+        password: '',
+        department: '',
+        position: '',
+        joinDate: '',
+        dateOfBirth: '',
+        address: '',
+      });
+      setSelectedPhoto(null);
+      setPhotoPreview('');
       fetchEmployees();
     } catch (error: any) {
       toast({
@@ -247,16 +316,32 @@ const HREmployees = () => {
                         <Label>Profile Photo</Label>
                         <div className="flex items-center gap-4">
                           <Avatar className="h-20 w-20 border-2 border-border">
-                            <AvatarFallback className="bg-primary/20 text-primary">
-                              <UserCircle className="h-10 w-10" />
-                            </AvatarFallback>
+                            {photoPreview ? (
+                              <AvatarImage src={photoPreview} alt="Preview" />
+                            ) : (
+                              <AvatarFallback className="bg-primary/20 text-primary">
+                                <UserCircle className="h-10 w-10" />
+                              </AvatarFallback>
+                            )}
                           </Avatar>
                           <div className="flex-1">
-                            <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors cursor-pointer bg-secondary/30">
+                            <input
+                              type="file"
+                              id="photo-upload"
+                              className="hidden"
+                              accept="image/png,image/jpeg,image/jpg"
+                              onChange={handlePhotoChange}
+                            />
+                            <label
+                              htmlFor="photo-upload"
+                              className="block border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors cursor-pointer bg-secondary/30"
+                            >
                               <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
-                              <p className="text-sm text-muted-foreground">Click to upload photo</p>
+                              <p className="text-sm text-muted-foreground">
+                                {selectedPhoto ? selectedPhoto.name : 'Click to upload photo'}
+                              </p>
                               <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                            </div>
+                            </label>
                           </div>
                         </div>
                       </div>
@@ -264,50 +349,91 @@ const HREmployees = () => {
                       {/* Name and Employee ID (Username) */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Full Name</Label>
-                          <Input placeholder="John Doe" className="bg-secondary border-border" />
+                          <Label>Full Name *</Label>
+                          <Input 
+                            placeholder="John Doe" 
+                            className="bg-secondary border-border"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          />
                         </div>
                         <div className="space-y-2">
-                          <Label>Employee ID (Username) <span className="text-xs text-muted-foreground">- Used for login</span></Label>
-                          <Input placeholder="EMP-XXX or john.doe" className="bg-secondary border-border" />
+                          <Label>Employee ID (Username) * <span className="text-xs text-muted-foreground">- Used for login</span></Label>
+                          <Input 
+                            placeholder="EMP-XXX or john.doe" 
+                            className="bg-secondary border-border"
+                            value={formData.employeeId}
+                            onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                          />
                         </div>
                       </div>
 
                       {/* Password */}
                       <div className="space-y-2">
-                        <Label>Password <span className="text-xs text-muted-foreground">- Initial login password</span></Label>
-                        <Input type="text" placeholder="Create password for employee" className="bg-secondary border-border" />
+                        <Label>Password * <span className="text-xs text-muted-foreground">- Initial login password</span></Label>
+                        <Input 
+                          type="text" 
+                          placeholder="Create password for employee" 
+                          className="bg-secondary border-border"
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        />
                       </div>
 
                       {/* Email and Phone */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Email</Label>
-                          <Input type="email" placeholder="employee@company.com" className="bg-secondary border-border" />
+                          <Label>Email *</Label>
+                          <Input 
+                            type="email" 
+                            placeholder="employee@company.com" 
+                            className="bg-secondary border-border"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Phone</Label>
-                          <Input type="tel" placeholder="+1 (555) 123-4567" className="bg-secondary border-border" />
+                          <Input 
+                            type="tel" 
+                            placeholder="+1 (555) 123-4567" 
+                            className="bg-secondary border-border"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          />
                         </div>
                       </div>
 
                       {/* Date of Birth */}
                       <div className="space-y-2">
                         <Label>Date of Birth</Label>
-                        <Input type="date" className="bg-secondary border-border" />
+                        <Input 
+                          type="date" 
+                          className="bg-secondary border-border"
+                          value={formData.dateOfBirth}
+                          onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                        />
                       </div>
 
                       {/* Address */}
                       <div className="space-y-2">
                         <Label>Address</Label>
-                        <Textarea placeholder="Full address" className="bg-secondary border-border min-h-[80px]" />
+                        <Textarea 
+                          placeholder="Full address" 
+                          className="bg-secondary border-border min-h-[80px]"
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        />
                       </div>
 
                       {/* Department and Position */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Department</Label>
-                          <Select>
+                          <Select 
+                            value={formData.department}
+                            onValueChange={(value) => setFormData({ ...formData, department: value })}
+                          >
                             <SelectTrigger className="bg-secondary border-border">
                               <SelectValue placeholder="Select department" />
                             </SelectTrigger>
@@ -322,17 +448,27 @@ const HREmployees = () => {
                         </div>
                         <div className="space-y-2">
                           <Label>Position</Label>
-                          <Input placeholder="Job Title" className="bg-secondary border-border" />
+                          <Input 
+                            placeholder="Job Title" 
+                            className="bg-secondary border-border"
+                            value={formData.position}
+                            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                          />
                         </div>
                       </div>
 
                       {/* Join Date */}
                       <div className="space-y-2">
                         <Label>Join Date</Label>
-                        <Input type="date" className="bg-secondary border-border" />
+                        <Input 
+                          type="date" 
+                          className="bg-secondary border-border"
+                          value={formData.joinDate}
+                          onChange={(e) => setFormData({ ...formData, joinDate: e.target.value })}
+                        />
                       </div>
                       <div className="flex gap-3 pt-4">
-                        <Button className="flex-1 glow-button" onClick={() => setIsAddDialogOpen(false)}>
+                        <Button className="flex-1 glow-button" onClick={handleCreateEmployee}>
                           Add Employee
                         </Button>
                         <Button variant="outline" className="flex-1" onClick={() => setIsAddDialogOpen(false)}>

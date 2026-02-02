@@ -25,13 +25,26 @@ import { useToast } from '@/hooks/use-toast';
 
 interface AttendanceRecord {
   _id: string;
-  user?: { name: string };
+  user?: { 
+    _id: string;
+    name: string;
+    employeeId?: string;
+  };
   employeeName?: string;
   date: string;
+  checkIn?: {
+    time?: string;
+    location?: { latitude: number; longitude: number; address?: string };
+  };
+  checkOut?: {
+    time?: string;
+    location?: { latitude: number; longitude: number; address?: string };
+  };
   checkInTime?: string;
   checkOutTime?: string;
   totalHours?: string;
-  status: 'present' | 'absent' | 'late' | 'half-day';
+  workHours?: number;
+  status: 'present' | 'absent' | 'late' | 'half-day' | 'on-leave';
   location?: string;
 }
 
@@ -74,8 +87,15 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
       const result = role === 'employee'
         ? await execute(() => attendanceAPI.getMyAttendance())
         : await execute(() => hrAPI.getTodayAttendance());
+      
+      console.log('Attendance API result:', result);
+      
       if (result?.data) {
-        setAttendanceData(Array.isArray(result.data) ? result.data : [result.data]);
+        // For HR/Admin, data comes as { attendance: [], absent: [], stats: {} }
+        // For Employee, data comes directly as an array
+        const records = result.data.attendance || result.data;
+        console.log('Attendance records:', records);
+        setAttendanceData(Array.isArray(records) ? records : [records]);
       }
     } catch (error: any) {
       const statusCode = error.response?.status;
@@ -287,11 +307,34 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                   ) : (
                     filteredData.map((record) => {
                       const employeeName = record.user?.name || record.employeeName || 'Unknown';
-                      const displayDate = new Date(record.date).toLocaleDateString();
-                      const checkIn = record.checkInTime || '-';
-                      const checkOut = record.checkOutTime || '-';
-                      const hours = record.totalHours || '-';
-                      const location = record.location || '-';
+                      const displayDate = record.date ? new Date(record.date).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      }) : 'Invalid Date';
+                      
+                      // Handle both old and new data structures
+                      const checkInTime = record.checkIn?.time || record.checkInTime;
+                      const checkOutTime = record.checkOut?.time || record.checkOutTime;
+                      
+                      const checkIn = checkInTime 
+                        ? new Date(checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                        : '-';
+                      const checkOut = checkOutTime 
+                        ? new Date(checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                        : '-';
+                      
+                      // Calculate hours if both times exist
+                      let hours = '-';
+                      if (record.workHours) {
+                        hours = `${Math.floor(record.workHours / 60)}h ${record.workHours % 60}m`;
+                      } else if (checkInTime && checkOutTime) {
+                        const diff = new Date(checkOutTime).getTime() - new Date(checkInTime).getTime();
+                        const totalMinutes = Math.floor(diff / (1000 * 60));
+                        hours = `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
+                      }
+                      
+                      const checkInLocation = record.checkIn?.location;
                       
                       return (
                         <TableRow key={record._id} className="hover:bg-secondary/30">
@@ -299,7 +342,7 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                             <div className="flex items-center gap-3">
                               <Avatar className="h-8 w-8">
                                 <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                                  {employeeName.split(' ').map((n, i) => n[0]).join('')}
+                                  {employeeName.split(' ').map(n => n[0]).join('')}
                                 </AvatarFallback>
                               </Avatar>
                               <span className="text-sm font-medium">{employeeName}</span>
@@ -311,10 +354,24 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                           <TableCell>{hours}</TableCell>
                           <TableCell>{getStatusBadge(record.status)}</TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <MapPin className="h-3 w-3" />
-                              <span className="text-xs">{location}</span>
-                            </div>
+                            {checkInLocation ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${checkInLocation.latitude},${checkInLocation.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"
+                              >
+                                <MapPin className="h-3 w-3" />
+                                <span className="text-xs underline">
+                                  {checkInLocation.latitude.toFixed(4)}, {checkInLocation.longitude.toFixed(4)}
+                                </span>
+                              </a>
+                            ) : (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <MapPin className="h-3 w-3" />
+                                <span className="text-xs">-</span>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

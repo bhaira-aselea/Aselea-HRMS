@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,7 +32,10 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
+import { hrAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 // Import employee components for monitoring
 import EmployeeTasksContent from '@/components/modules/EmployeeTasksContent.tsx';
@@ -40,20 +43,19 @@ import EmployeeChatContent from '@/components/modules/EmployeeChatContent.tsx';
 
 // Type definitions
 interface Employee {
-  id: string;
-  empId: string;
+  _id: string;
+  employeeId: string;
   name: string;
   email: string;
-  phone: string;
-  department: string;
-  position: string;
-  dateOfBirth: string;
-  joinedDate: string;
-  address: string;
-  reportingTo: string;
-  status: 'active' | 'inactive';
-  profilePicture?: string;
-  defaultPassword?: string;
+  phone?: string;
+  department?: string;
+  position?: string;
+  dateOfBirth?: string;
+  joinDate?: string;
+  address?: string;
+  status: 'active' | 'inactive' | 'on-leave';
+  profilePhoto?: string;
+  company?: any;
 }
 
 interface DailyAttendance {
@@ -79,28 +81,7 @@ interface AttendanceEditRequest {
   requestedAt: string;
 }
 
-type Section = 'overview' | 'attendance' | 'tasks' | 'chat';
-
-// Mock employee data
-const employees: Employee[] = [
-  {
-    id: '1',
-    empId: 'EMP001',
-    name: 'John Doe',
-    email: 'john.doe@company.com',
-    phone: '+1 234 567 8900',
-    department: 'Engineering',
-    position: 'Senior Developer',
-    dateOfBirth: '1990-05-15',
-    joinedDate: '2020-01-15',
-    address: '123 Main St, Cityville, State 12345',
-    reportingTo: 'Jane Smith',
-    status: 'active',
-    defaultPassword: 'emp-001',
-  },
-];
-
-// Generate full month attendance data
+// Generate full month attendance data (temporary mock until attendance API is integrated)
 const generateAttendanceData = (year: number, month: number, employeeId: string): DailyAttendance[] => {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const attendance: DailyAttendance[] = [];
@@ -160,42 +141,17 @@ const generateAttendanceData = (year: number, month: number, employeeId: string)
   return attendance;
 };
 
-// Mock edit requests
-const mockEditRequests: AttendanceEditRequest[] = [
-  {
-    id: '1',
-    employeeId: '1',
-    employeeName: 'John Doe',
-    date: '2026-01-27',
-    originalPunchIn: '09:00 AM',
-    originalPunchOut: '06:00 PM',
-    requestedPunchIn: '09:15 AM',
-    requestedPunchOut: '06:30 PM',
-    reason: 'Forgot to punch in on time due to system issue. Actually arrived at 9:15 AM and left at 6:30 PM',
-    status: 'pending',
-    requestedAt: '2026-01-27T18:30:00',
-  },
-  {
-    id: '2',
-    employeeId: '1',
-    employeeName: 'John Doe',
-    date: '2026-01-25',
-    originalPunchIn: '09:00 AM',
-    originalPunchOut: null,
-    requestedPunchIn: '09:00 AM',
-    requestedPunchOut: '07:00 PM',
-    reason: 'I forgot to punch out. Was working late on urgent project.',
-    status: 'pending',
-    requestedAt: '2026-01-25T20:00:00',
-  },
-];
+type Section = 'overview' | 'attendance' | 'tasks' | 'chat';
 
 const EmployeeDetail = () => {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const today = new Date();
+  const [loading, setLoading] = useState(true);
+  const [employee, setEmployee] = useState<Employee | null>(null);
   const [activeSection, setActiveSection] = useState<Section>('overview');
-  const [editRequests, setEditRequests] = useState<AttendanceEditRequest[]>(mockEditRequests);
+  const [editRequests, setEditRequests] = useState<AttendanceEditRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<AttendanceEditRequest | null>(null);
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   
@@ -209,11 +165,33 @@ const EmployeeDetail = () => {
     endDate: '',
   });
 
-  // Find employee by ID
-  const employee = employees.find(emp => emp.id === employeeId);
+  // Fetch employee details from API
+  useEffect(() => {
+    const fetchEmployee = async () => {
+      if (!employeeId) return;
+      
+      try {
+        setLoading(true);
+        const response = await hrAPI.getEmployeeDetail(employeeId);
+        setEmployee(response.data.data);
+      } catch (error: any) {
+        console.error('Failed to fetch employee:', error);
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to load employee details',
+          variant: 'destructive',
+        });
+        navigate('/hr/employees');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEmployee();
+  }, [employeeId, navigate, toast]);
   
-  // Get employee attendance for selected month
-  const allAttendance = generateAttendanceData(selectedYear, selectedMonth, employeeId || '');
+  // Get employee attendance for selected month (keeping mock for now as attendance API might be different)
+  const allAttendance = employee ? generateAttendanceData(selectedYear, selectedMonth, employeeId || '') : [];
   
   // Filter attendance based on view
   const getFilteredAttendance = () => {
@@ -312,6 +290,26 @@ const EmployeeDetail = () => {
     setIsRequestDialogOpen(true);
   };
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="p-6">
+          <Card className="glass-card">
+            <CardContent className="p-12">
+              <div className="text-center">
+                <Loader2 className="h-16 w-16 mx-auto mb-4 text-primary animate-spin" />
+                <h2 className="text-2xl font-bold mb-2">Loading Employee Details...</h2>
+                <p className="text-muted-foreground">
+                  Please wait while we fetch the employee information.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!employee) {
     return (
       <DashboardLayout>
@@ -365,7 +363,7 @@ const EmployeeDetail = () => {
               <CardContent className="p-6">
                 <div className="flex flex-col items-center">
                   <Avatar className="h-32 w-32 mb-4 ring-4 ring-primary/20">
-                    <AvatarImage src={employee.profilePicture} alt={employee.name} />
+                    <AvatarImage src={employee.profilePhoto} alt={employee.name} />
                     <AvatarFallback className="text-3xl bg-primary/20 text-primary">
                       {employee.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
@@ -383,7 +381,7 @@ const EmployeeDetail = () => {
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <UserCircle className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">ID: {employee.empId}</span>
+                      <span className="text-muted-foreground">ID: {employee.employeeId}</span>
                     </div>
                   </div>
                 </div>
@@ -516,7 +514,7 @@ const EmployeeDetail = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Employee ID</p>
-                        <p className="font-medium">{employee.empId}</p>
+                        <p className="font-medium">{employee.employeeId}</p>
                       </div>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Department</p>
@@ -529,16 +527,12 @@ const EmployeeDetail = () => {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Joined Date</p>
                         <p className="font-medium">
-                          {new Date(employee.joinedDate).toLocaleDateString('en-US', {
+                          {employee.joinDate && new Date(employee.joinDate).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric'
                           })}
                         </p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Reporting To</p>
-                        <p className="font-medium">{employee.reportingTo}</p>
                       </div>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Status</p>
@@ -567,9 +561,15 @@ const EmployeeDetail = () => {
                         <p className="font-medium">{employee.email}</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Default Password</p>
+                        <p className="text-sm text-muted-foreground">Employee ID (Username)</p>
                         <p className="font-medium font-mono bg-secondary px-3 py-2 rounded-lg inline-block">
-                          {employee.defaultPassword}
+                          {employee.employeeId}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Note</p>
+                        <p className="text-sm text-muted-foreground">
+                          Employee can login using their Employee ID and the password set during creation.
                         </p>
                       </div>
                     </div>

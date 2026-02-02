@@ -34,8 +34,15 @@ const EmployeeDashboard = () => {
       const response = await employeeAPI.getDashboard();
       const data = response.data.data;
       setDashboardData(data);
-      setMyTasks(data?.tasks || []);
-      setAnnouncements(data?.announcements || []);
+      
+      // Ensure tasks is always an array
+      const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+      setMyTasks(tasks);
+      
+      // Ensure announcements is always an array
+      const announcementsData = Array.isArray(data?.announcements) ? data.announcements : [];
+      setAnnouncements(announcementsData);
+      
       setIsPunchedIn(data?.attendance?.isPunchedIn || false);
       setPunchTime(data?.attendance?.punchTime || null);
     } catch (error: any) {
@@ -45,6 +52,9 @@ const EmployeeDashboard = () => {
         description: error.response?.data?.message || 'Failed to load dashboard',
         variant: 'destructive',
       });
+      // Set empty arrays on error to prevent map errors
+      setMyTasks([]);
+      setAnnouncements([]);
     } finally {
       setLoading(false);
     }
@@ -76,7 +86,7 @@ const EmployeeDashboard = () => {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to punch in/out',
+        description: error.response?.data?.message || 'Failed to check in/out',
         variant: 'destructive',
       });
     }
@@ -95,9 +105,9 @@ const EmployeeDashboard = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6 fade-in">
-        {/* Welcome & Punch Card */}
+        {/* Welcome & Check In Card */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Punch In/Out Card */}
+          {/* Check In/Out Card */}
           <Card className="lg:col-span-2 glass-card">
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -109,7 +119,7 @@ const EmployeeDashboard = () => {
                   {isPunchedIn && punchTime && (
                     <div className="flex items-center gap-2 mt-3 text-success">
                       <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm">Punched in at {punchTime}</span>
+                      <span className="text-sm">Checked in at {punchTime}</span>
                     </div>
                   )}
                 </div>
@@ -207,11 +217,12 @@ const EmployeeDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {myTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="p-4 rounded-lg bg-secondary/50"
-                  >
+                {Array.isArray(myTasks) && myTasks.length > 0 ? (
+                  myTasks.map((task) => (
+                    <div
+                      key={task.id || task._id}
+                      className="p-4 rounded-lg bg-secondary/50"
+                    >
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="text-sm font-medium text-foreground">{task.title}</p>
@@ -235,7 +246,13 @@ const EmployeeDashboard = () => {
                       <Progress value={task.progress} className="h-2" />
                     </div>
                   </div>
-                ))}
+                ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <ClipboardList className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>No tasks assigned yet</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -251,11 +268,12 @@ const EmployeeDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {announcements.map((announcement) => (
-                  <div
-                    key={announcement.id}
-                    className="p-4 rounded-lg bg-secondary/50 border-l-4 border-primary"
-                  >
+                {Array.isArray(announcements) && announcements.length > 0 ? (
+                  announcements.map((announcement) => (
+                    <div
+                      key={announcement.id || announcement._id}
+                      className="p-4 rounded-lg bg-secondary/50 border-l-4 border-primary"
+                    >
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm font-medium text-foreground">{announcement.title}</p>
@@ -272,7 +290,13 @@ const EmployeeDashboard = () => {
                       </Badge>
                     </div>
                   </div>
-                ))}
+                ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Megaphone className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>No announcements yet</p>
+                  </div>
+                )}
               </div>
 
               {/* Leave Balance Summary */}

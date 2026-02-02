@@ -19,7 +19,12 @@ import { useToast } from '@/hooks/use-toast';
 
 interface LeaveRequest {
   _id: string;
-  employee: {
+  user?: {
+    name: string;
+    employeeId: string;
+    department?: string;
+  };
+  employee?: {
     name: string;
     employeeId: string;
     company?: { name: string };
@@ -256,28 +261,31 @@ const AdminLeaves = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredRequests.map((request) => (
+                  filteredRequests.map((request) => {
+                    const employeeName = request.user?.name || request.employee?.name || 'Unknown Employee';
+                    const employeeId = request.user?.employeeId || request.employee?.employeeId || 'N/A';
+                    return (
                   <TableRow key={request._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                            {request.employee.name.split(' ').map(n => n[0]).join('')}
+                            {employeeName.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium text-sm">{request.employee.name}</p>
-                          <p className="text-xs text-muted-foreground">{request.employee.employeeId}</p>
+                          <p className="font-medium text-sm">{employeeName}</p>
+                          <p className="text-xs text-muted-foreground">{employeeId}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 text-sm">
                         <Building2 className="h-3 w-3 text-muted-foreground" />
-                        {request.employee.company?.name || 'N/A'}
+                        {request.user?.company?.name || request.employee?.company?.name || 'N/A'}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{request.employee.department || 'N/A'}</TableCell>
+                    <TableCell className="text-sm">{request.user?.department || request.employee?.department || 'N/A'}</TableCell>
                     <TableCell>{getLeaveTypeBadge(request.leaveType)}</TableCell>
                     <TableCell>
                       <div className="text-sm">
@@ -320,7 +328,8 @@ const AdminLeaves = () => {
                       )}
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,16 +23,38 @@ import {
   AlertCircle,
   CircleDot,
   Send,
+  Loader2,
+  MapPin,
 } from 'lucide-react';
+import { attendanceAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
-// Mock attendance data for logged-in employee
+interface TodayAttendance {
+  _id?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  status: 'present' | 'absent' | 'late' | 'on-leave';
+  location?: {
+    checkIn?: { latitude: number; longitude: number; address?: string };
+    checkOut?: { latitude: number; longitude: number; address?: string };
+  };
+}
+
 interface DailyAttendance {
+  _id: string;
   date: string;
-  status: 'present' | 'absent' | 'late' | 'leave' | null;
-  punchIn: string | null;
-  punchOut: string | null;
-  duration: string | null;
-  remarks: string | null;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  status: 'present' | 'absent' | 'late' | 'on-leave';
+  duration?: number;
+  checkIn?: {
+    time?: string;
+    location?: { latitude: number; longitude: number; address?: string };
+  };
+  checkOut?: {
+    time?: string;
+    location?: { latitude: number; longitude: number; address?: string };
+  };
 }
 
 interface AttendanceEditRequest {
@@ -47,84 +69,17 @@ interface AttendanceEditRequest {
   submittedAt: string;
 }
 
-const generateMonthAttendance = (year: number, month: number): DailyAttendance[] => {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const attendance: DailyAttendance[] = [];
-  
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    const dateStr = date.toISOString().split('T')[0];
-    
-    // Mock data - past dates have attendance
-    if (day < 30) {
-      const rand = Math.random();
-      if (rand > 0.9) {
-        attendance.push({
-          date: dateStr,
-          status: 'absent',
-          punchIn: null,
-          punchOut: null,
-          duration: null,
-          remarks: null,
-        });
-      } else if (rand > 0.8) {
-        attendance.push({
-          date: dateStr,
-          status: 'leave',
-          punchIn: null,
-          punchOut: null,
-          duration: null,
-          remarks: 'Sick Leave',
-        });
-      } else if (rand > 0.7) {
-        attendance.push({
-          date: dateStr,
-          status: 'late',
-          punchIn: '10:15 AM',
-          punchOut: '06:30 PM',
-          duration: '08:15',
-          remarks: 'Traffic delay',
-        });
-      } else {
-        attendance.push({
-          date: dateStr,
-          status: 'present',
-          punchIn: '09:00 AM',
-          punchOut: '06:00 PM',
-          duration: '09:00',
-          remarks: null,
-        });
-      }
-    } else if (day === 30) {
-      attendance.push({
-        date: dateStr,
-        status: 'present',
-        punchIn: '09:00 AM',
-        punchOut: null,
-        duration: null,
-        remarks: null,
-      });
-    } else {
-      attendance.push({
-        date: dateStr,
-        status: null,
-        punchIn: null,
-        punchOut: null,
-        duration: null,
-        remarks: null,
-      });
-    }
-  }
-  
-  return attendance;
-};
-
 const EmployeeAttendance = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const [punchedIn, setPunchedIn] = useState(true); // Mock: Employee already punched in today
+  const [loading, setLoading] = useState(true);
+  const [punchingIn, setPunchingIn] = useState(false);
+  const [punchingOut, setPunchingOut] = useState(false);
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
+  const [monthAttendance, setMonthAttendance] = useState<DailyAttendance[]>([]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<DailyAttendance | null>(null);
   const [editFormData, setEditFormData] = useState({
@@ -133,14 +88,137 @@ const EmployeeAttendance = () => {
     reason: '',
   });
   
-  const monthAttendance = generateMonthAttendance(selectedYear, selectedMonth);
+  useEffect(() => {
+    fetchTodayAttendance();
+    fetchMonthAttendance();
+  }, [selectedYear, selectedMonth]);
+
+  const fetchTodayAttendance = async () => {
+    try {
+      const response = await attendanceAPI.getToday();
+      setTodayAttendance(response.data.data);
+    } catch (error: any) {
+      console.error('Failed to fetch today attendance:', error);
+      // If no attendance for today, that's okay - user hasn't checked in yet
+      if (error.response?.status !== 404) {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to load today\'s attendance',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const fetchMonthAttendance = async () => {
+    try {
+      setLoading(true);
+      const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
+      const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString();
+      
+      const response = await attendanceAPI.getMyAttendance({ 
+        startDate,
+        endDate,
+      });
+      setMonthAttendance(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch attendance:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load attendance records',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getLocation = (): Promise<{ latitude: number; longitude: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          reject(error);
+        }
+      );
+    });
+  };
+
+  const handlePunchIn = async () => {
+    try {
+      setPunchingIn(true);
+      let location;
+      
+      try {
+        location = await getLocation();
+        toast({
+          title: 'Location captured',
+          description: 'Your check-in location has been recorded',
+        });
+      } catch (error) {
+        console.error('Location error:', error);
+        toast({
+          title: 'Warning',
+          description: 'Could not get location, proceeding without it',
+          variant: 'destructive',
+        });
+      }
+
+      await attendanceAPI.checkIn(location);
+      toast({
+        title: 'Success',
+        description: 'Checked in successfully!',
+      });
+      fetchTodayAttendance();
+      fetchMonthAttendance();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to check in',
+        variant: 'destructive',
+      });
+    } finally {
+      setPunchingIn(false);
+    }
+  };
+
+  const handlePunchOut = async () => {
+    try {
+      setPunchingOut(true);
+      await attendanceAPI.checkOut();
+      toast({
+        title: 'Success',
+        description: 'Checked out successfully!',
+      });
+      fetchTodayAttendance();
+      fetchMonthAttendance();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to check out',
+        variant: 'destructive',
+      });
+    } finally {
+      setPunchingOut(false);
+    }
+  };
   
   // Calculate stats for current month
   const stats = {
     present: monthAttendance.filter(d => d.status === 'present').length,
     late: monthAttendance.filter(d => d.status === 'late').length,
     absent: monthAttendance.filter(d => d.status === 'absent').length,
-    leave: monthAttendance.filter(d => d.status === 'leave').length,
+    leave: monthAttendance.filter(d => d.status === 'on-leave').length,
   };
   
   const months = [
@@ -176,16 +254,21 @@ const EmployeeAttendance = () => {
   const getCalendarDays = () => {
     const firstDay = new Date(selectedYear, selectedMonth, 1).getDay();
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    const days: (DailyAttendance | null)[] = [];
+    const days: Array<{ day: number; attendance: DailyAttendance | null }> = [];
     
     // Add empty cells for days before month starts
     for (let i = 0; i < firstDay; i++) {
-      days.push(null);
+      days.push({ day: 0, attendance: null });
     }
     
-    // Add actual days
-    for (let i = 0; i < daysInMonth; i++) {
-      days.push(monthAttendance[i]);
+    // Add actual days with attendance records matched by date
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = new Date(selectedYear, selectedMonth, day).toISOString().split('T')[0];
+      const attendanceRecord = monthAttendance.find(record => {
+        const recordDate = new Date(record.date).toISOString().split('T')[0];
+        return recordDate === dateStr;
+      });
+      days.push({ day, attendance: attendanceRecord || null });
     }
     
     return days;
@@ -199,7 +282,7 @@ const EmployeeAttendance = () => {
         return 'bg-warning/20 border-warning/40 text-warning';
       case 'absent':
         return 'bg-destructive/20 border-destructive/40 text-destructive';
-      case 'leave':
+      case 'on-leave':
         return 'bg-primary/20 border-primary/40 text-primary';
       default:
         return 'bg-muted border-border text-muted-foreground';
@@ -214,7 +297,7 @@ const EmployeeAttendance = () => {
         return <Badge className="status-pending">Late</Badge>;
       case 'absent':
         return <Badge className="status-rejected">Absent</Badge>;
-      case 'leave':
+      case 'on-leave':
         return <Badge className="status-in-progress">Leave</Badge>;
       default:
         return <Badge variant="outline">-</Badge>;
@@ -230,9 +313,12 @@ const EmployeeAttendance = () => {
 
   const openEditDialog = (record: DailyAttendance) => {
     setSelectedRecord(record);
+    const checkInTime = record.checkInTime ? new Date(record.checkInTime) : null;
+    const checkOutTime = record.checkOutTime ? new Date(record.checkOutTime) : null;
+    
     setEditFormData({
-      punchIn: record.punchIn || '',
-      punchOut: record.punchOut || '',
+      punchIn: checkInTime ? `${String(checkInTime.getHours()).padStart(2, '0')}:${String(checkInTime.getMinutes()).padStart(2, '0')}` : '',
+      punchOut: checkOutTime ? `${String(checkOutTime.getHours()).padStart(2, '0')}:${String(checkOutTime.getMinutes()).padStart(2, '0')}` : '',
       reason: '',
     });
     setIsEditDialogOpen(true);
@@ -242,8 +328,8 @@ const EmployeeAttendance = () => {
     // Here you would send the edit request to the backend
     console.log('Submitting edit request:', {
       date: selectedRecord?.date,
-      originalPunchIn: selectedRecord?.punchIn,
-      originalPunchOut: selectedRecord?.punchOut,
+      originalPunchIn: selectedRecord?.checkInTime,
+      originalPunchOut: selectedRecord?.checkOutTime,
       requestedPunchIn: editFormData.punchIn,
       requestedPunchOut: editFormData.punchOut,
       reason: editFormData.reason,
@@ -266,9 +352,9 @@ const EmployeeAttendance = () => {
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                  punchedIn ? 'bg-success/20' : 'bg-destructive/20'
+                  todayAttendance?.checkInTime ? 'bg-success/20' : 'bg-destructive/20'
                 }`}>
-                  {punchedIn ? (
+                  {todayAttendance?.checkInTime ? (
                     <CheckCircle className="h-8 w-8 text-success" />
                   ) : (
                     <Clock className="h-8 w-8 text-destructive" />
@@ -276,28 +362,31 @@ const EmployeeAttendance = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    {punchedIn ? 'Punched In' : 'Not Punched In'}
+                    {todayAttendance?.checkInTime ? 'Checked In' : 'Not Checked In'}
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {punchedIn ? 'Punch in time: 09:00 AM • Today' : 'Mark your attendance for today'}
+                    {todayAttendance?.checkInTime 
+                      ? `Check in time: ${new Date(todayAttendance.checkInTime).toLocaleTimeString()} • Today` 
+                      : 'Mark your attendance for today'}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <Button 
-                  className={punchedIn ? 'bg-destructive hover:bg-destructive/90' : 'glow-button'}
+                  className={todayAttendance?.checkInTime && !todayAttendance?.checkOutTime ? 'bg-destructive hover:bg-destructive/90' : 'glow-button'}
                   size="lg"
-                  onClick={() => setPunchedIn(!punchedIn)}
+                  onClick={todayAttendance?.checkInTime && !todayAttendance?.checkOutTime ? handlePunchOut : handlePunchIn}
+                  disabled={todayAttendance?.checkOutTime !== undefined}
                 >
-                  {punchedIn ? (
+                  {todayAttendance?.checkInTime && !todayAttendance?.checkOutTime ? (
                     <>
                       <LogOut className="h-4 w-4 mr-2" />
-                      Punch Out
+                      Check Out
                     </>
                   ) : (
                     <>
                       <LogIn className="h-4 w-4 mr-2" />
-                      Punch In
+                      Check In
                     </>
                   )}
                 </Button>
@@ -433,31 +522,32 @@ const EmployeeAttendance = () => {
               
               {/* Calendar Days */}
               <div className="grid grid-cols-7 gap-2">
-                {getCalendarDays().map((day, idx) => {
-                  if (!day) {
+                {getCalendarDays().map((dayData, idx) => {
+                  if (dayData.day === 0) {
                     return <div key={`empty-${idx}`} className="h-14" />;
                   }
                   
-                  const dayNum = new Date(day.date).getDate();
-                  const isTodayDay = isToday(day.date);
+                  const currentDate = new Date(selectedYear, selectedMonth, dayData.day);
+                  const isTodayDay = isToday(currentDate.toISOString());
+                  const attendance = dayData.attendance;
                   
                   return (
                     <div
-                      key={day.date}
+                      key={`day-${dayData.day}`}
                       className={`
                         h-14 rounded-lg border-2 p-1.5 flex flex-col items-center justify-center
                         transition-all duration-200 hover:scale-105 cursor-pointer
                         ${isTodayDay ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}
-                        ${getStatusColor(day.status)}
+                        ${getStatusColor(attendance?.status || null)}
                       `}
                     >
-                      <span className="text-xs font-semibold">{dayNum}</span>
-                      {day.status && (
+                      <span className="text-xs font-semibold">{dayData.day}</span>
+                      {attendance?.status && (
                         <div className="mt-0.5">
-                          {day.status === 'present' && <CheckCircle className="h-2.5 w-2.5" />}
-                          {day.status === 'late' && <AlertCircle className="h-2.5 w-2.5" />}
-                          {day.status === 'absent' && <XCircle className="h-2.5 w-2.5" />}
-                          {day.status === 'leave' && <CircleDot className="h-2.5 w-2.5" />}
+                          {attendance.status === 'present' && <CheckCircle className="h-2.5 w-2.5" />}
+                          {attendance.status === 'late' && <AlertCircle className="h-2.5 w-2.5" />}
+                          {attendance.status === 'absent' && <XCircle className="h-2.5 w-2.5" />}
+                          {attendance.status === 'on-leave' && <CircleDot className="h-2.5 w-2.5" />}
                         </div>
                       )}
                     </div>
@@ -481,10 +571,10 @@ const EmployeeAttendance = () => {
                     <tr className="bg-secondary/50 border-b border-border">
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Date</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Status</th>
-                      <th className="text-left p-4 text-sm font-semibold text-foreground">Punch In</th>
-                      <th className="text-left p-4 text-sm font-semibold text-foreground">Punch Out</th>
+                      <th className="text-left p-4 text-sm font-semibold text-foreground">Check In</th>
+                      <th className="text-left p-4 text-sm font-semibold text-foreground">Check Out</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Duration</th>
-                      <th className="text-left p-4 text-sm font-semibold text-foreground">Remarks</th>
+                      <th className="text-left p-4 text-sm font-semibold text-foreground">Location</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Action</th>
                     </tr>
                   </thead>
@@ -502,24 +592,41 @@ const EmployeeAttendance = () => {
                           <td className="p-4 text-sm text-muted-foreground">{formattedDate}</td>
                           <td className="p-4">{getStatusBadge(record.status)}</td>
                           <td className="p-4 text-sm">
-                            {record.punchIn ? (
-                              <span className="text-foreground font-medium">{record.punchIn}</span>
+                            {record.checkInTime ? (
+                              <span className="text-foreground font-medium">
+                                {new Date(record.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </td>
                           <td className="p-4 text-sm">
-                            {record.punchOut ? (
-                              <span className="text-foreground font-medium">{record.punchOut}</span>
+                            {record.checkOutTime ? (
+                              <span className="text-foreground font-medium">
+                                {new Date(record.checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </td>
                           <td className="p-4 text-sm text-foreground font-medium">
-                            {record.duration || '-'}
+                            {record.duration ? `${Math.floor(record.duration / 60)}h ${record.duration % 60}m` : '-'}
                           </td>
-                          <td className="p-4 text-sm text-muted-foreground">
-                            {record.remarks || '-'}
+                          <td className="p-4 text-sm">
+                            {record.checkIn?.location ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${record.checkIn.location.latitude},${record.checkIn.location.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"
+                                title="View check-in location on Google Maps"
+                              >
+                                <MapPin className="h-4 w-4" />
+                                <span className="underline">View</span>
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </td>
                           <td className="p-4">
                             {record.status === 'present' || record.status === 'late' ? (
@@ -551,7 +658,7 @@ const EmployeeAttendance = () => {
             <DialogHeader>
               <DialogTitle>Request Attendance Edit</DialogTitle>
               <DialogDescription>
-                Submit a request to edit your punch in/out times for{' '}
+                Submit a request to edit your check in/out times for{' '}
                 {selectedRecord && new Date(selectedRecord.date).toLocaleDateString('en-US', { 
                   month: 'long', 
                   day: 'numeric',
@@ -565,15 +672,15 @@ const EmployeeAttendance = () => {
                 <p className="text-sm font-semibold text-foreground">Current Record:</p>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Punch In: </span>
+                    <span className="text-muted-foreground">Check In: </span>
                     <span className="text-foreground font-medium">
-                      {selectedRecord?.punchIn || 'Not recorded'}
+                      {selectedRecord?.checkInTime ? new Date(selectedRecord.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Not recorded'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Punch Out: </span>
+                    <span className="text-muted-foreground">Check Out: </span>
                     <span className="text-foreground font-medium">
-                      {selectedRecord?.punchOut || 'Not recorded'}
+                      {selectedRecord?.checkOutTime ? new Date(selectedRecord.checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Not recorded'}
                     </span>
                   </div>
                 </div>
@@ -582,7 +689,7 @@ const EmployeeAttendance = () => {
               {/* Requested Times */}
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label htmlFor="punchIn">Corrected Punch In Time</Label>
+                  <Label htmlFor="punchIn">Corrected Check In Time</Label>
                   <Input
                     id="punchIn"
                     type="time"
@@ -592,7 +699,7 @@ const EmployeeAttendance = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="punchOut">Corrected Punch Out Time</Label>
+                  <Label htmlFor="punchOut">Corrected Check Out Time</Label>
                   <Input
                     id="punchOut"
                     type="time"
@@ -605,7 +712,7 @@ const EmployeeAttendance = () => {
                   <Label htmlFor="reason">Reason for Edit Request <span className="text-destructive">*</span></Label>
                   <Textarea
                     id="reason"
-                    placeholder="Explain why you need to edit this attendance record (e.g., forgot to punch in/out, system error, etc.)"
+                    placeholder="Explain why you need to edit this attendance record (e.g., forgot to check in/out, system error, etc.)"
                     className="bg-secondary border-border min-h-[100px]"
                     value={editFormData.reason}
                     onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}

@@ -20,11 +20,17 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/useApi';
-import { leaveAPI } from '@/lib/apiClient';
+import { leaveAPI, employeeAPI } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 
 interface LeaveRequest {
   _id: string;
+  user?: { 
+    name: string;
+    employeeId?: string;
+    department?: string;
+    position?: string;
+  };
   employee?: { name: string };
   employeeName?: string;
   leaveType: string;
@@ -97,9 +103,16 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
 
   const fetchLeaveBalance = async () => {
     try {
-      const result = await execute(() => leaveAPI.getBalance());
+      const result = await execute(() => employeeAPI.getLeaveBalance());
       if (result?.data) {
-        setLeaveBalance(result.data);
+        // Transform the object into an array format
+        const balanceArray = Object.entries(result.data).map(([type, value]) => ({
+          leaveType: type.charAt(0).toUpperCase() + type.slice(1), // Capitalize first letter
+          total: value as number,
+          used: 0, // Backend doesn't track used, only remaining
+          remaining: value as number,
+        }));
+        setLeaveBalance(balanceArray);
       }
     } catch (error: any) {
       console.error('Failed to fetch balance:', error);
@@ -299,10 +312,12 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
                               <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Casual">Casual Leave</SelectItem>
-                              <SelectItem value="Sick">Sick Leave</SelectItem>
-                              <SelectItem value="Annual">Annual Leave</SelectItem>
-                              <SelectItem value="Maternity">Maternity/Paternity</SelectItem>
+                              <SelectItem value="casual">Casual Leave</SelectItem>
+                              <SelectItem value="sick">Sick Leave</SelectItem>
+                              <SelectItem value="annual">Annual Leave</SelectItem>
+                              <SelectItem value="maternity">Maternity Leave</SelectItem>
+                              <SelectItem value="paternity">Paternity Leave</SelectItem>
+                              <SelectItem value="unpaid">Unpaid Leave</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -347,22 +362,24 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {filteredRequests.map((request) => (
+              {filteredRequests.map((request) => {
+                const employeeName = request.user?.name || request.employee?.name || request.employeeName || 'Unknown Employee';
+                return (
                 <div
-                  key={request.id}
+                  key={request._id}
                   className="p-4 rounded-lg bg-secondary/50 border border-border hover:border-primary/30 transition-colors"
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <Avatar>
                         <AvatarFallback className="bg-primary/20 text-primary">
-                          {request.employeeName.split(' ').map(n => n[0]).join('')}
+                          {employeeName.split(' ').map(n => n[0]).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium text-foreground">{request.employeeName}</p>
+                        <p className="font-medium text-foreground">{employeeName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {request.type} • {request.days} day{request.days > 1 ? 's' : ''}
+                          {request.leaveType} • {new Date(request.endDate).getDate() - new Date(request.startDate).getDate() + 1} day(s)
                         </p>
                       </div>
                     </div>
@@ -391,7 +408,8 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
                     Reason: {request.reason}
                   </p>
                 </div>
-              ))}
+              );
+              })}
             </div>
           </CardContent>
         </Card>

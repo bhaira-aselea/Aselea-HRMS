@@ -49,17 +49,17 @@ export const hrAPI = {
 
 // Employee APIs
 export const employeeAPI = {
-  getDashboard: () => api.get('/employee/dashboard'),
-  getProfile: () => api.get('/employee/profile'),
-  updateProfile: (data: any) => api.put('/employee/profile', data),
+  getDashboard: () => api.get('/employees/dashboard'),
+  getProfile: () => api.get('/employees/profile'),
+  updateProfile: (data: any) => api.put('/employees/profile', data),
   changePassword: (currentPassword: string, newPassword: string) =>
-    api.put('/employee/change-password', { currentPassword, newPassword }),
-  getMyTasks: (params?: any) => api.get('/employee/tasks', { params }),
-  getMyLeaves: (params?: any) => api.get('/employee/leaves', { params }),
-  getMyExpenses: (params?: any) => api.get('/employee/expenses', { params }),
-  getMyAttendance: (params?: any) => api.get('/employee/attendance', { params }),
-  getLeaveBalance: () => api.get('/employee/leave-balance'),
-  getTeam: () => api.get('/employee/team'),
+    api.put('/employees/change-password', { currentPassword, newPassword }),
+  getMyTasks: (params?: any) => api.get('/employees/tasks', { params }),
+  getMyLeaves: (params?: any) => api.get('/employees/leaves', { params }),
+  getMyExpenses: (params?: any) => api.get('/employees/expenses', { params }),
+  getMyAttendance: (params?: any) => api.get('/employees/attendance', { params }),
+  getLeaveBalance: () => api.get('/employees/leave-balance'),
+  getTeam: () => api.get('/employees/team'),
 };
 
 // Leave APIs

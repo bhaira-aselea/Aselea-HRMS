@@ -142,20 +142,25 @@ const HRDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {pendingLeaves.map((leave) => (
+                {pendingLeaves.map((leave) => {
+                  const employeeName = leave.user?.name || leave.employee?.name || leave.name || 'Unknown Employee';
+                  const leaveType = leave.leaveType || leave.type || 'Leave';
+                  const startDate = leave.startDate || leave.from || '';
+                  const endDate = leave.endDate || leave.to || '';
+                  return (
                   <div
-                    key={leave.id}
+                    key={leave._id || leave.id}
                     className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50"
                   >
                     <Avatar>
                       <AvatarFallback className="bg-primary/20 text-primary">
-                        {leave.name.split(' ').map(n => n[0]).join('')}
+                        {employeeName.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">{leave.name}</p>
+                      <p className="text-sm font-medium text-foreground">{employeeName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {leave.type} • {leave.days} day{leave.days > 1 ? 's' : ''} • {leave.from} - {leave.to}
+                        {leaveType} • {leave.days} day{leave.days > 1 ? 's' : ''} • {startDate} - {endDate}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -167,7 +172,8 @@ const HRDashboard = () => {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
