@@ -59,6 +59,8 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
   const [filter, setFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string>('');
   const [formData, setFormData] = useState({
     category: '',
     amount: '',
@@ -97,16 +99,25 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
       return;
     }
     try {
-      await execute(() => expenseAPI.createExpense({
-        ...formData,
-        amount: Number(formData.amount),
-      }));
+      const expenseData = new FormData();
+      expenseData.append('category', formData.category);
+      expenseData.append('amount', formData.amount);
+      expenseData.append('description', formData.description);
+      expenseData.append('date', formData.date);
+      
+      if (receiptFile) {
+        expenseData.append('receipt', receiptFile);
+      }
+      
+      await execute(() => expenseAPI.createExpense(expenseData));
       toast({
         title: 'Success',
         description: 'Expense claim submitted successfully',
       });
       setIsDialogOpen(false);
       setFormData({ category: '', amount: '', description: '', date: '' });
+      setReceiptFile(null);
+      setReceiptPreview('');
       fetchExpenses();
     } catch (error: any) {
       toast({
@@ -271,12 +282,12 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Travel">Travel</SelectItem>
-                              <SelectItem value="Meals">Meals</SelectItem>
-                              <SelectItem value="Supplies">Supplies</SelectItem>
-                              <SelectItem value="Equipment">Equipment</SelectItem>
-                              <SelectItem value="Training">Training</SelectItem>
-                              <SelectItem value="Other">Other</SelectItem>
+                              <SelectItem value="travel">Travel</SelectItem>
+                              <SelectItem value="food">Food/Meals</SelectItem>
+                              <SelectItem value="office-supplies">Office Supplies</SelectItem>
+                              <SelectItem value="software">Software</SelectItem>
+                              <SelectItem value="training">Training</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -302,6 +313,48 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                           </div>
                         </div>
                         <div className="space-y-2">
+                          <Label>Bill/Receipt Photo (Optional)</Label>
+                          <div className="flex flex-col gap-3">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              className="bg-secondary border-border"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setReceiptFile(file);
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setReceiptPreview(reader.result as string);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                            {receiptPreview && (
+                              <div className="relative w-full h-32 rounded-lg overflow-hidden border border-border">
+                                <img
+                                  src={receiptPreview}
+                                  alt="Receipt preview"
+                                  className="w-full h-full object-cover"
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="destructive"
+                                  className="absolute top-2 right-2"
+                                  onClick={() => {
+                                    setReceiptFile(null);
+                                    setReceiptPreview('');
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
                           <Label>Description</Label>
                           <Textarea 
                             placeholder="Describe the expense" 
@@ -322,16 +375,19 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {filteredExpenses.map((expense) => (
+              {filteredExpenses.map((expense) => {
+                const employeeName = expense.user?.name || expense.employee?.name || expense.employeeName || 'Unknown Employee';
+                
+                return (
                 <div
-                  key={expense.id}
+                  key={expense._id || expense.id}
                   className="p-4 rounded-lg bg-secondary/50 border border-border hover:border-primary/30 transition-colors"
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <Avatar>
                         <AvatarFallback className="bg-primary/20 text-primary">
-                          {expense.employeeName.split(' ').map(n => n[0]).join('')}
+                          {employeeName.split(' ').map(n => n[0]).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <div>
@@ -341,7 +397,7 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                         </div>
                         <p className="text-sm text-muted-foreground">{expense.description}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                          <span>{expense.employeeName}</span>
+                          <span>{employeeName}</span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {expense.date}
@@ -370,7 +426,8 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

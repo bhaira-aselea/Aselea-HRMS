@@ -229,8 +229,8 @@ const AdminTasks = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {employees.map(emp => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.id}) - {emp.department}
+                        <SelectItem key={emp._id || emp.id} value={emp._id || emp.id}>
+                          {emp.name} ({emp._id || emp.id}) - {emp.department}
                         </SelectItem>
                       ))}
                     </SelectContent>

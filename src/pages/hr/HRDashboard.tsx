@@ -268,20 +268,23 @@ const HRDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {pendingExpenses.map((expense) => (
+                {pendingExpenses.map((expense) => {
+                  const employeeName = expense.user?.name || expense.employee?.name || expense.name || 'Unknown Employee';
+                  
+                  return (
                   <div
-                    key={expense.id}
+                    key={expense._id || expense.id}
                     className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50"
                   >
                     <Avatar>
                       <AvatarFallback className="bg-primary/20 text-primary">
-                        {expense.name.split(' ').map(n => n[0]).join('')}
+                        {employeeName.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">${expense.amount}</p>
                       <p className="text-xs text-muted-foreground">
-                        {expense.name} • {expense.description}
+                        {employeeName} • {expense.description}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -293,7 +296,8 @@ const HRDashboard = () => {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
