@@ -14,8 +14,17 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { CalendarCheck, Check, X, Building2, UserCircle, Filter, Loader2 } from 'lucide-react';
-import { adminAPI } from '@/lib/apiClient';
+import { adminAPI, leaveAPI } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface LeaveRequest {
   _id: string;
@@ -47,6 +56,10 @@ const AdminLeaves = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchLeaves = useCallback(async () => {
     try {
@@ -70,17 +83,57 @@ const AdminLeaves = () => {
   }, [fetchLeaves]);
 
   const handleApprove = async (id: string) => {
-    setLeaveRequests(leaveRequests.map(req => 
-      req._id === id ? { ...req, status: 'approved' as const } : req
-    ));
-    // TODO: Call backend API to approve leave
+    try {
+      setActionLoading(true);
+      await leaveAPI.approveLeave(id);
+      toast({
+        title: 'Success',
+        description: 'Leave request approved successfully',
+      });
+      // Refresh the leave list
+      fetchLeaves();
+    } catch (error: any) {
+      console.error('Failed to approve leave:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to approve leave request',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleReject = async (id: string) => {
-    setLeaveRequests(leaveRequests.map(req => 
-      req._id === id ? { ...req, status: 'rejected' as const } : req
-    ));
-    // TODO: Call backend API to reject leave
+  const handleReject = async () => {
+    if (!selectedLeaveId) return;
+    
+    try {
+      setActionLoading(true);
+      await leaveAPI.rejectLeave(selectedLeaveId, rejectReason);
+      toast({
+        title: 'Success',
+        description: 'Leave request rejected',
+      });
+      setRejectDialogOpen(false);
+      setSelectedLeaveId(null);
+      setRejectReason('');
+      // Refresh the leave list
+      fetchLeaves();
+    } catch (error: any) {
+      console.error('Failed to reject leave:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to reject leave request',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openRejectDialog = (leaveId: string) => {
+    setSelectedLeaveId(leaveId);
+    setRejectDialogOpen(true);
   };
 
   const filteredRequests = leaveRequests.filter(req => {
@@ -311,6 +364,7 @@ const AdminLeaves = () => {
                             variant="ghost"
                             className="text-success hover:text-success hover:bg-success/10"
                             onClick={() => handleApprove(request._id)}
+                            disabled={actionLoading}
                           >
                             <Check className="h-4 w-4" />
                           </Button>
@@ -318,7 +372,8 @@ const AdminLeaves = () => {
                             size="sm"
                             variant="ghost"
                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleReject(request._id)}
+                            onClick={() => openRejectDialog(request._id)}
+                            disabled={actionLoading}
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -336,6 +391,56 @@ const AdminLeaves = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reject Leave Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Leave Request</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this leave request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reason">Rejection Reason</Label>
+              <Input
+                id="reason"
+                placeholder="Enter reason for rejection..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectDialogOpen(false);
+                setRejectReason('');
+                setSelectedLeaveId(null);
+              }}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={actionLoading || !rejectReason.trim()}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                'Reject Leave'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

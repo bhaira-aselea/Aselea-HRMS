@@ -68,6 +68,10 @@ const getStatusBadge = (status: string) => {
 const LeaveModule = ({ role }: LeaveModuleProps) => {
   const [filter, setFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance[]>([]);
   const [formData, setFormData] = useState({
@@ -149,10 +153,11 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
 
   const handleApprove = async (id: string) => {
     try {
+      setActionLoading(true);
       await execute(() => leaveAPI.approveLeave(id));
       toast({
         title: 'Success',
-        description: 'Leave request approved',
+        description: 'Leave request approved successfully',
       });
       fetchLeaves();
     } catch (error: any) {
@@ -161,16 +166,24 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
         description: error.response?.data?.message || 'Failed to approve leave',
         variant: 'destructive',
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleReject = async (id: string) => {
+  const handleReject = async () => {
+    if (!selectedLeaveId || !rejectReason.trim()) return;
+    
     try {
-      await execute(() => leaveAPI.rejectLeave(id, 'Rejected by HR'));
+      setActionLoading(true);
+      await execute(() => leaveAPI.rejectLeave(selectedLeaveId, rejectReason));
       toast({
         title: 'Success',
         description: 'Leave request rejected',
       });
+      setRejectDialogOpen(false);
+      setSelectedLeaveId(null);
+      setRejectReason('');
       fetchLeaves();
     } catch (error: any) {
       toast({
@@ -178,7 +191,14 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
         description: error.response?.data?.message || 'Failed to reject leave',
         variant: 'destructive',
       });
+    } finally {
+      setActionLoading(false);
     }
+  };
+
+  const openRejectDialog = (leaveId: string) => {
+    setSelectedLeaveId(leaveId);
+    setRejectDialogOpen(true);
   };
 
   const filteredRequests = leaveRequests.filter(request => {
@@ -394,10 +414,22 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
                       {getStatusBadge(request.status)}
                       {canApprove && request.status === 'pending' && (
                         <div className="flex gap-2">
-                          <Button size="sm" variant="ghost" className="text-success hover:text-success hover:bg-success/10">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-success hover:text-success hover:bg-success/10"
+                            onClick={() => handleApprove(request._id)}
+                            disabled={actionLoading}
+                          >
                             <CheckCircle className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => openRejectDialog(request._id)}
+                            disabled={actionLoading}
+                          >
                             <XCircle className="h-4 w-4" />
                           </Button>
                         </div>
@@ -414,6 +446,57 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reject Leave Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Leave Request</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this leave request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reject-reason">Rejection Reason</Label>
+              <Textarea
+                id="reject-reason"
+                placeholder="Enter reason for rejection..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectDialogOpen(false);
+                setRejectReason('');
+                setSelectedLeaveId(null);
+              }}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={actionLoading || !rejectReason.trim()}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                'Reject Leave'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

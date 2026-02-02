@@ -67,9 +67,10 @@ export const leaveAPI = {
   getLeaves: (params?: any) => api.get('/leaves', { params }),
   createLeave: (data: any) => api.post('/leaves', data),
   getLeaveById: (id: string) => api.get(`/leaves/${id}`),
-  approveLeave: (id: string) => api.put(`/leaves/${id}/approve`),
-  rejectLeave: (id: string, reason?: string) => 
-    api.put(`/leaves/${id}/reject`, { reason }),
+  approveLeave: (id: string, reviewNote?: string) => 
+    api.put(`/leaves/${id}/approve`, { reviewNote }),
+  rejectLeave: (id: string, reviewNote?: string) => 
+    api.put(`/leaves/${id}/reject`, { reviewNote }),
   cancelLeave: (id: string) => api.put(`/leaves/${id}/cancel`),
   getBalance: () => api.get('/leaves/balance'),
   getStatistics: (params?: any) => api.get('/leaves/statistics', { params }),
