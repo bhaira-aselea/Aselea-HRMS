@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useApi } from '@/hooks/useApi';
+import { announcementAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 import {
   Megaphone,
   Plus,
@@ -16,65 +19,18 @@ import {
   AlertTriangle,
   Info,
   Clock,
+  Loader2,
 } from 'lucide-react';
 
 interface Announcement {
-  id: string;
+  _id: string;
   title: string;
   content: string;
-  author: string;
-  date: string;
+  author?: { name: string } | string;
+  createdAt: string;
   priority: 'low' | 'medium' | 'high';
   category: string;
 }
-
-const announcements: Announcement[] = [
-  { 
-    id: '1', 
-    title: 'Office Closed for Maintenance', 
-    content: 'The office will be closed on February 15th for annual maintenance work. Please plan accordingly and work remotely on this day.', 
-    author: 'HR Team', 
-    date: 'Jan 30, 2026', 
-    priority: 'high',
-    category: 'Facility'
-  },
-  { 
-    id: '2', 
-    title: 'New Health Insurance Benefits', 
-    content: 'We are pleased to announce enhanced health insurance benefits starting March 1st. The new plan includes dental and vision coverage.', 
-    author: 'Benefits Team', 
-    date: 'Jan 28, 2026', 
-    priority: 'medium',
-    category: 'Benefits'
-  },
-  { 
-    id: '3', 
-    title: 'Team Building Event', 
-    content: 'Join us for our quarterly team building event on February 20th at the Grand Conference Center. Activities include workshops and networking.', 
-    author: 'Culture Committee', 
-    date: 'Jan 25, 2026', 
-    priority: 'low',
-    category: 'Events'
-  },
-  { 
-    id: '4', 
-    title: 'Updated Leave Policy', 
-    content: 'Please review the updated leave policy document. Key changes include increased casual leave days and new parental leave benefits.', 
-    author: 'HR Team', 
-    date: 'Jan 22, 2026', 
-    priority: 'high',
-    category: 'Policy'
-  },
-  { 
-    id: '5', 
-    title: 'IT System Upgrade', 
-    content: 'The IT team will be performing system upgrades this weekend. Expect brief interruptions to email and internal tools on Saturday.', 
-    author: 'IT Department', 
-    date: 'Jan 20, 2026', 
-    priority: 'medium',
-    category: 'IT'
-  },
-];
 
 interface AnnouncementsModuleProps {
   role: 'admin' | 'hr' | 'employee';
@@ -107,6 +63,64 @@ const getPriorityBadge = (priority: string) => {
 const AnnouncementsModule = ({ role }: AnnouncementsModuleProps) => {
   const [filter, setFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    category: '',
+    priority: 'low',
+  });
+  
+  const { data, loading, execute } = useApi();
+  const { toast } = useToast();
+
+  // Fetch announcements on mount
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const result = await execute(() => announcementAPI.getAnnouncements());
+      if (result?.data) {
+        setAnnouncements(result.data);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch announcements',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCreateAnnouncement = async () => {
+    if (!formData.title || !formData.content || !formData.category) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await execute(() => announcementAPI.createAnnouncement(formData));
+      toast({
+        title: 'Success',
+        description: 'Announcement published successfully',
+      });
+      setIsDialogOpen(false);
+      setFormData({ title: '', content: '', category: '', priority: 'low' });
+      fetchAnnouncements();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create announcement',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredAnnouncements = announcements.filter(ann => {
     if (filter === 'all') return true;
@@ -205,12 +219,17 @@ const AnnouncementsModule = ({ role }: AnnouncementsModuleProps) => {
                       <div className="space-y-4 mt-4">
                         <div className="space-y-2">
                           <Label>Title</Label>
-                          <Input placeholder="Enter announcement title" className="bg-secondary border-border" />
+                          <Input 
+                            placeholder="Enter announcement title" 
+                            className="bg-secondary border-border" 
+                            value={formData.title}
+                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label>Category</Label>
-                            <Select>
+                            <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                               <SelectTrigger className="bg-secondary border-border">
                                 <SelectValue placeholder="Select category" />
                               </SelectTrigger>
@@ -226,7 +245,7 @@ const AnnouncementsModule = ({ role }: AnnouncementsModuleProps) => {
                           </div>
                           <div className="space-y-2">
                             <Label>Priority</Label>
-                            <Select>
+                            <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
                               <SelectTrigger className="bg-secondary border-border">
                                 <SelectValue placeholder="Select priority" />
                               </SelectTrigger>
@@ -240,10 +259,26 @@ const AnnouncementsModule = ({ role }: AnnouncementsModuleProps) => {
                         </div>
                         <div className="space-y-2">
                           <Label>Content</Label>
-                          <Textarea placeholder="Enter announcement content" className="bg-secondary border-border min-h-[120px]" />
+                          <Textarea 
+                            placeholder="Enter announcement content" 
+                            className="bg-secondary border-border min-h-[120px]" 
+                            value={formData.content}
+                            onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                          />
                         </div>
-                        <Button className="w-full glow-button" onClick={() => setIsDialogOpen(false)}>
-                          Publish Announcement
+                        <Button 
+                          className="w-full glow-button" 
+                          onClick={handleCreateAnnouncement}
+                          disabled={loading}
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Publishing...
+                            </>
+                          ) : (
+                            'Publish Announcement'
+                          )}
                         </Button>
                       </div>
                     </DialogContent>
@@ -253,38 +288,49 @@ const AnnouncementsModule = ({ role }: AnnouncementsModuleProps) => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredAnnouncements.map((announcement) => (
-                <div
-                  key={announcement.id}
-                  className={`p-5 rounded-lg bg-secondary/50 border-l-4 ${
-                    announcement.priority === 'high' ? 'border-l-destructive' :
-                    announcement.priority === 'medium' ? 'border-l-warning' : 'border-l-primary'
-                  } hover:bg-secondary transition-colors`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      {getPriorityIcon(announcement.priority)}
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-foreground">{announcement.title}</h3>
-                          {getPriorityBadge(announcement.priority)}
-                          <Badge variant="outline" className="text-xs">{announcement.category}</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{announcement.content}</p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span>{announcement.author}</span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {announcement.date}
-                          </span>
+            {loading && !announcements.length ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredAnnouncements.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No announcements found</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredAnnouncements.map((announcement) => (
+                  <div
+                    key={announcement._id}
+                    className={`p-5 rounded-lg bg-secondary/50 border-l-4 ${
+                      announcement.priority === 'high' ? 'border-l-destructive' :
+                      announcement.priority === 'medium' ? 'border-l-warning' : 'border-l-primary'
+                    } hover:bg-secondary transition-colors`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        {getPriorityIcon(announcement.priority)}
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-semibold text-foreground">{announcement.title}</h3>
+                            {getPriorityBadge(announcement.priority)}
+                            <Badge variant="outline" className="text-xs capitalize">{announcement.category}</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">{announcement.content}</p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span>{typeof announcement.author === 'string' ? announcement.author : announcement.author?.name || 'System'}</span>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(announcement.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

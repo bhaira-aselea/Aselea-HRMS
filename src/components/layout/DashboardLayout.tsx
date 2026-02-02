@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { announcementAPI } from '@/lib/apiClient';
 import {
   LayoutDashboard,
   Building2,
@@ -32,7 +33,6 @@ import {
   Info,
   ArrowRight,
 } from 'lucide-react';
-import { useState } from 'react';
 import aseleaLogo from '@/assets/aselea-logo.png';
 
 interface NavItem {
@@ -107,50 +107,6 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-// Recent announcements for notification dropdown
-const recentAnnouncements = [
-  { 
-    id: '1', 
-    title: 'Office Closed for Maintenance', 
-    date: 'Jan 30, 2026', 
-    priority: 'high' as const,
-  },
-  { 
-    id: '2', 
-    title: 'New Health Insurance Benefits', 
-    date: 'Jan 28, 2026', 
-    priority: 'medium' as const,
-  },
-  { 
-    id: '3', 
-    title: 'Team Building Event', 
-    date: 'Jan 25, 2026', 
-    priority: 'low' as const,
-  },
-];
-
-const getPriorityIcon = (priority: string) => {
-  switch (priority) {
-    case 'high':
-      return <AlertTriangle className="h-4 w-4 text-destructive" />;
-    case 'medium':
-      return <Bell className="h-4 w-4 text-warning" />;
-    default:
-      return <Info className="h-4 w-4 text-primary" />;
-  }
-};
-
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case 'high':
-      return 'text-destructive';
-    case 'medium':
-      return 'text-warning';
-    default:
-      return 'text-primary';
-  }
-};
-
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -158,12 +114,50 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [recentAnnouncements, setRecentAnnouncements] = useState<any[]>([]);
 
   const navItems = getNavItems(userRole);
+
+  // Fetch recent announcements
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        const response = await announcementAPI.getAnnouncements({ limit: 3 });
+        if (response.data?.data) {
+          setRecentAnnouncements(response.data.data.slice(0, 3));
+        }
+      } catch (error) {
+        console.error('Failed to fetch announcements:', error);
+      }
+    };
+    fetchAnnouncements();
+  }, []);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const getPriorityIcon = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return <AlertTriangle className="h-4 w-4 text-destructive" />;
+      case 'medium':
+        return <Bell className="h-4 w-4 text-warning" />;
+      default:
+        return <Info className="h-4 w-4 text-primary" />;
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return 'text-destructive';
+      case 'medium':
+        return 'text-warning';
+      default:
+        return 'text-primary';
+    }
   };
 
   const NavContent = () => (
@@ -340,7 +334,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                               {announcement.title}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {announcement.date}
+                              {announcement.createdAt ? new Date(announcement.createdAt).toLocaleDateString() : announcement.date}
                             </p>
                           </div>
                         </div>

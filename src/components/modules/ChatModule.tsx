@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,66 +16,111 @@ import {
   MoreVertical,
   Phone,
   Video,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useApi } from '@/hooks/useApi';
+import { chatAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChatGroup {
-  id: string;
-  name: string;
+  _id: string;
+  otherUser?: { _id: string; name: string };
+  name?: string;
   type: 'group' | 'personal';
-  avatar?: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
+  lastMessage?: { content: string; createdAt: string };
+  unreadCount?: number;
   members?: number;
   online?: boolean;
 }
 
 interface Message {
-  id: string;
-  sender: string;
+  _id: string;
+  sender: { _id: string; name: string };
   content: string;
-  time: string;
-  isMe: boolean;
+  createdAt: string;
+  isMe?: boolean;
 }
-
-const chatGroups: ChatGroup[] = [
-  { id: '1', name: 'Engineering Team', type: 'group', lastMessage: 'Great work on the release!', time: '2m', unread: 3, members: 12 },
-  { id: '2', name: 'HR Announcements', type: 'group', lastMessage: 'New policy update...', time: '15m', unread: 1, members: 45 },
-  { id: '3', name: 'John Doe', type: 'personal', lastMessage: 'Can we discuss the project?', time: '1h', unread: 0, online: true },
-  { id: '4', name: 'Jane Smith', type: 'personal', lastMessage: 'Thanks for the update!', time: '2h', unread: 0, online: false },
-  { id: '5', name: 'Project Alpha', type: 'group', lastMessage: 'Meeting scheduled for tomorrow', time: '3h', unread: 5, members: 8 },
-  { id: '6', name: 'Mike Johnson', type: 'personal', lastMessage: 'See you at the meeting', time: '5h', unread: 0, online: true },
-];
-
-const sampleMessages: Message[] = [
-  { id: '1', sender: 'John Doe', content: 'Hey team, just wanted to share some updates on the project.', time: '10:30 AM', isMe: false },
-  { id: '2', sender: 'Me', content: 'Thanks John! Looking forward to hearing the details.', time: '10:32 AM', isMe: true },
-  { id: '3', sender: 'Jane Smith', content: 'Great! I have some feedback on the design as well.', time: '10:35 AM', isMe: false },
-  { id: '4', sender: 'Me', content: 'Perfect, let\'s schedule a call to discuss everything.', time: '10:38 AM', isMe: true },
-  { id: '5', sender: 'John Doe', content: 'How about tomorrow at 2 PM?', time: '10:40 AM', isMe: false },
-  { id: '6', sender: 'Me', content: 'Works for me! I\'ll send out the calendar invite.', time: '10:42 AM', isMe: true },
-];
 
 interface ChatModuleProps {
   role: 'admin' | 'hr' | 'employee';
 }
 
 const ChatModule = ({ role }: ChatModuleProps) => {
-  const [selectedChat, setSelectedChat] = useState<ChatGroup | null>(chatGroups[0]);
+  const [selectedChat, setSelectedChat] = useState<ChatGroup | null>(null);
   const [message, setMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [conversations, setConversations] = useState<ChatGroup[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const { loading, execute } = useApi();
+  const { toast } = useToast();
 
-  const filteredChats = chatGroups.filter(chat =>
-    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    fetchConversations();
+  }, []);
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      // In real app, this would send the message
-      setMessage('');
+  useEffect(() => {
+    if (selectedChat?.otherUser?._id) {
+      fetchMessages(selectedChat.otherUser._id);
+    }
+  }, [selectedChat]);
+
+  const fetchConversations = async () => {
+    try {
+      const result = await execute(() => chatAPI.getConversations());
+      if (result?.data) {
+        setConversations(result.data);
+        if (result.data.length > 0 && !selectedChat) {
+          setSelectedChat(result.data[0]);
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch conversations',
+        variant: 'destructive',
+      });
     }
   };
+
+  const fetchMessages = async (userId: string) => {
+    try {
+      const result = await execute(() => chatAPI.getMessages(userId));
+      if (result?.data) {
+        setMessages(result.data);
+      }
+      // Mark as read
+      await chatAPI.markAsRead(userId);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch messages',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!selectedChat?.otherUser?._id || !message.trim()) return;
+    
+    try {
+      await execute(() => chatAPI.sendMessage(selectedChat.otherUser._id, message));
+      setMessage('');
+      fetchMessages(selectedChat.otherUser._id);
+      fetchConversations();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to send message',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const filteredChats = conversations.filter(chat => {
+    const chatName = chat.otherUser?.name || chat.name || '';
+    return chatName.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <DashboardLayout>
@@ -95,49 +140,63 @@ const ChatModule = ({ role }: ChatModuleProps) => {
             </div>
           </CardHeader>
           <CardContent className="flex-1 p-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="p-2 space-y-1">
-                {filteredChats.map((chat) => (
-                  <div
-                    key={chat.id}
-                    onClick={() => setSelectedChat(chat)}
-                    className={cn(
-                      'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors',
-                      selectedChat?.id === chat.id
-                        ? 'bg-primary/15 border border-primary/20'
-                        : 'hover:bg-secondary'
-                    )}
-                  >
-                    <div className="relative">
-                      <Avatar>
-                        <AvatarFallback className="bg-primary/20 text-primary">
-                          {chat.type === 'group' ? (
-                            <Users className="h-4 w-4" />
-                          ) : (
-                            chat.name.split(' ').map(n => n[0]).join('')
-                          )}
-                        </AvatarFallback>
-                      </Avatar>
-                      {chat.type === 'personal' && chat.online && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border-2 border-background" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-foreground truncate">{chat.name}</p>
-                        <span className="text-xs text-muted-foreground">{chat.time}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{chat.lastMessage}</p>
-                    </div>
-                    {chat.unread > 0 && (
-                      <Badge className="bg-primary text-primary-foreground h-5 w-5 p-0 flex items-center justify-center text-xs">
-                        {chat.unread}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
+            {loading && conversations.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            </ScrollArea>
+            ) : (
+              <ScrollArea className="h-full">
+                <div className="p-2 space-y-1">
+                  {filteredChats.map((chat) => {
+                    const chatName = chat.otherUser?.name || chat.name || 'Unknown';
+                    const lastMsg = chat.lastMessage?.content || 'No messages yet';
+                    const timeAgo = chat.lastMessage?.createdAt 
+                      ? new Date(chat.lastMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : '';
+                    
+                    return (
+                      <div
+                        key={chat._id}
+                        onClick={() => setSelectedChat(chat)}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors',
+                          selectedChat?._id === chat._id
+                            ? 'bg-primary/15 border border-primary/20'
+                            : 'hover:bg-secondary'
+                        )}
+                      >
+                        <div className="relative">
+                          <Avatar>
+                            <AvatarFallback className="bg-primary/20 text-primary">
+                              {chat.type === 'group' ? (
+                                <Users className="h-4 w-4" />
+                              ) : (
+                                chatName.split(' ').map(n => n[0]).join('')
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                          {chat.type === 'personal' && chat.online && (
+                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border-2 border-background" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-foreground truncate">{chatName}</p>
+                            <span className="text-xs text-muted-foreground">{timeAgo}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{lastMsg}</p>
+                        </div>
+                        {(chat.unreadCount || 0) > 0 && (
+                          <Badge className="bg-primary text-primary-foreground h-5 w-5 p-0 flex items-center justify-center text-xs">
+                            {chat.unreadCount}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
           </CardContent>
         </Card>
 
@@ -153,15 +212,15 @@ const ChatModule = ({ role }: ChatModuleProps) => {
                       {selectedChat.type === 'group' ? (
                         <Users className="h-4 w-4" />
                       ) : (
-                        selectedChat.name.split(' ').map(n => n[0]).join('')
+                        (selectedChat.otherUser?.name || selectedChat.name || 'U').split(' ').map(n => n[0]).join('')
                       )}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium text-foreground">{selectedChat.name}</p>
+                    <p className="font-medium text-foreground">{selectedChat.otherUser?.name || selectedChat.name || 'Chat'}</p>
                     <p className="text-xs text-muted-foreground">
                       {selectedChat.type === 'group'
-                        ? `${selectedChat.members} members`
+                        ? `${selectedChat.members || 0} members`
                         : selectedChat.online ? 'Online' : 'Offline'}
                     </p>
                   </div>
@@ -181,37 +240,53 @@ const ChatModule = ({ role }: ChatModuleProps) => {
 
               {/* Messages */}
               <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  {sampleMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        'flex',
-                        msg.isMe ? 'justify-end' : 'justify-start'
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          'max-w-[70%] p-3 rounded-2xl',
-                          msg.isMe
-                            ? 'bg-primary text-primary-foreground rounded-br-sm'
-                            : 'bg-secondary text-foreground rounded-bl-sm'
-                        )}
-                      >
-                        {!msg.isMe && (
-                          <p className="text-xs font-medium text-primary mb-1">{msg.sender}</p>
-                        )}
-                        <p className="text-sm">{msg.content}</p>
-                        <p className={cn(
-                          'text-xs mt-1',
-                          msg.isMe ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                        )}>
-                          {msg.time}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {loading && messages.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No messages yet. Start a conversation!
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((msg) => {
+                      const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      
+                      return (
+                        <div
+                          key={msg._id}
+                          className={cn(
+                            'flex',
+                            msg.isMe ? 'justify-end' : 'justify-start'
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'max-w-[70%] p-3 rounded-2xl',
+                              msg.isMe
+                                ? 'bg-primary text-primary-foreground rounded-br-sm'
+                                : 'bg-secondary text-foreground rounded-bl-sm'
+                            )}
+                          >
+                            {!msg.isMe && (
+                              <p className="text-xs font-medium mb-1">{msg.sender.name}</p>
+                            )}
+                            <p className="text-sm">{msg.content}</p>
+                            <p
+                              className={cn(
+                                'text-xs mt-1',
+                                msg.isMe ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                              )}
+                            >
+                              {time}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </ScrollArea>
 
               {/* Message Input */}
@@ -227,18 +302,28 @@ const ChatModule = ({ role }: ChatModuleProps) => {
                     placeholder="Type a message..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                     className="flex-1 bg-secondary border-border"
                   />
-                  <Button onClick={handleSendMessage} className="glow-button">
-                    <Send className="h-4 w-4" />
+                  <Button 
+                    size="icon" 
+                    className="glow-button"
+                    onClick={handleSendMessage}
+                    disabled={loading || !message.trim()}
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              Select a conversation to start messaging
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Select a conversation to start chatting</p>
             </div>
           )}
         </Card>

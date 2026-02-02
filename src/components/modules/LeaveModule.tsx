@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,35 +16,31 @@ import {
   XCircle,
   Clock,
   Calendar,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useApi } from '@/hooks/useApi';
+import { leaveAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface LeaveRequest {
-  id: string;
-  employeeName: string;
-  type: string;
-  from: string;
-  to: string;
-  days: number;
+  _id: string;
+  employee?: { name: string };
+  employeeName?: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
-  appliedOn: string;
+  createdAt: string;
 }
 
-const leaveRequests: LeaveRequest[] = [
-  { id: '1', employeeName: 'John Doe', type: 'Sick Leave', from: 'Feb 1', to: 'Feb 2', days: 2, reason: 'Medical appointment', status: 'pending', appliedOn: 'Jan 28' },
-  { id: '2', employeeName: 'Jane Smith', type: 'Casual Leave', from: 'Feb 5', to: 'Feb 5', days: 1, reason: 'Personal work', status: 'pending', appliedOn: 'Jan 29' },
-  { id: '3', employeeName: 'Mike Johnson', type: 'Annual Leave', from: 'Feb 10', to: 'Feb 14', days: 5, reason: 'Family vacation', status: 'approved', appliedOn: 'Jan 25' },
-  { id: '4', employeeName: 'Sarah Wilson', type: 'Sick Leave', from: 'Jan 28', to: 'Jan 28', days: 1, reason: 'Not feeling well', status: 'rejected', appliedOn: 'Jan 27' },
-  { id: '5', employeeName: 'Tom Brown', type: 'Casual Leave', from: 'Feb 3', to: 'Feb 4', days: 2, reason: 'Home repair work', status: 'pending', appliedOn: 'Jan 30' },
-];
-
-const leaveBalance = [
-  { type: 'Casual Leave', total: 12, used: 5, remaining: 7 },
-  { type: 'Sick Leave', total: 10, used: 2, remaining: 8 },
-  { type: 'Annual Leave', total: 15, used: 8, remaining: 7 },
-  { type: 'Maternity/Paternity', total: 90, used: 0, remaining: 90 },
-];
+interface LeaveBalance {
+  leaveType: string;
+  total: number;
+  used: number;
+  remaining: number;
+}
 
 interface LeaveModuleProps {
   role: 'admin' | 'hr' | 'employee';
@@ -66,6 +62,111 @@ const getStatusBadge = (status: string) => {
 const LeaveModule = ({ role }: LeaveModuleProps) => {
   const [filter, setFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveBalance, setLeaveBalance] = useState<LeaveBalance[]>([]);
+  const [formData, setFormData] = useState({
+    leaveType: '',
+    startDate: '',
+    endDate: '',
+    reason: '',
+  });
+  const { loading, execute } = useApi();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchLeaves();
+    if (role === 'employee') {
+      fetchLeaveBalance();
+    }
+  }, [role]);
+
+  const fetchLeaves = async () => {
+    try {
+      const result = await execute(() => leaveAPI.getLeaves());
+      if (result?.data) {
+        setLeaveRequests(result.data);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch leave requests',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const fetchLeaveBalance = async () => {
+    try {
+      const result = await execute(() => leaveAPI.getBalance());
+      if (result?.data) {
+        setLeaveBalance(result.data);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch balance:', error);
+    }
+  };
+
+  const handleCreateLeave = async () => {
+    if (!formData.leaveType || !formData.startDate || !formData.endDate || !formData.reason) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await execute(() => leaveAPI.createLeave(formData));
+      toast({
+        title: 'Success',
+        description: 'Leave request submitted successfully',
+      });
+      setIsDialogOpen(false);
+      setFormData({ leaveType: '', startDate: '', endDate: '', reason: '' });
+      fetchLeaves();
+      if (role === 'employee') fetchLeaveBalance();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create leave request',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      await execute(() => leaveAPI.approveLeave(id));
+      toast({
+        title: 'Success',
+        description: 'Leave request approved',
+      });
+      fetchLeaves();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to approve leave',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await execute(() => leaveAPI.rejectLeave(id, 'Rejected by HR'));
+      toast({
+        title: 'Success',
+        description: 'Leave request rejected',
+      });
+      fetchLeaves();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to reject leave',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredRequests = leaveRequests.filter(request => {
     if (filter === 'all') return true;
@@ -82,9 +183,9 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
         {role === 'employee' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {leaveBalance.map((leave) => (
-              <Card key={leave.type} className="glass-card card-hover">
+              <Card key={leave.leaveType} className="glass-card card-hover">
                 <CardContent className="p-4">
-                  <p className="text-xs text-muted-foreground mb-2">{leave.type}</p>
+                  <p className="text-xs text-muted-foreground mb-2">{leave.leaveType}</p>
                   <div className="flex items-end justify-between">
                     <div>
                       <p className="text-3xl font-bold text-primary">{leave.remaining}</p>
@@ -193,33 +294,49 @@ const LeaveModule = ({ role }: LeaveModuleProps) => {
                       <div className="space-y-4 mt-4">
                         <div className="space-y-2">
                           <Label>Leave Type</Label>
-                          <Select>
+                          <Select value={formData.leaveType} onValueChange={(value) => setFormData({ ...formData, leaveType: value })}>
                             <SelectTrigger className="bg-secondary border-border">
                               <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="casual">Casual Leave</SelectItem>
-                              <SelectItem value="sick">Sick Leave</SelectItem>
-                              <SelectItem value="annual">Annual Leave</SelectItem>
+                              <SelectItem value="Casual">Casual Leave</SelectItem>
+                              <SelectItem value="Sick">Sick Leave</SelectItem>
+                              <SelectItem value="Annual">Annual Leave</SelectItem>
+                              <SelectItem value="Maternity">Maternity/Paternity</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label>From Date</Label>
-                            <Input type="date" className="bg-secondary border-border" />
+                            <Input 
+                              type="date" 
+                              className="bg-secondary border-border" 
+                              value={formData.startDate}
+                              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label>To Date</Label>
-                            <Input type="date" className="bg-secondary border-border" />
+                            <Input 
+                              type="date" 
+                              className="bg-secondary border-border"
+                              value={formData.endDate}
+                              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                            />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label>Reason</Label>
-                          <Textarea placeholder="Enter reason for leave" className="bg-secondary border-border" />
+                          <Textarea 
+                            placeholder="Enter reason for leave" 
+                            className="bg-secondary border-border"
+                            value={formData.reason}
+                            onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                          />
                         </div>
-                        <Button className="w-full glow-button" onClick={() => setIsDialogOpen(false)}>
-                          Submit Request
+                        <Button className="w-full glow-button" onClick={handleCreateLeave} disabled={loading}>
+                          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</> : 'Submit Request'}
                         </Button>
                       </div>
                     </DialogContent>

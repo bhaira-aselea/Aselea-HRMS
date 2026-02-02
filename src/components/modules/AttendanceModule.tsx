@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,27 +17,23 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
+import { useApi } from '@/hooks/useApi';
+import { attendanceAPI, hrAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface AttendanceRecord {
-  id: string;
-  employeeName: string;
+  _id: string;
+  user?: { name: string };
+  employeeName?: string;
   date: string;
-  punchIn: string;
-  punchOut: string;
-  totalHours: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  totalHours?: string;
   status: 'present' | 'absent' | 'late' | 'half-day';
-  location: string;
+  location?: string;
 }
-
-const attendanceData: AttendanceRecord[] = [
-  { id: '1', employeeName: 'John Doe', date: 'Jan 30, 2026', punchIn: '09:00 AM', punchOut: '06:00 PM', totalHours: '9h 0m', status: 'present', location: 'Office' },
-  { id: '2', employeeName: 'Jane Smith', date: 'Jan 30, 2026', punchIn: '08:45 AM', punchOut: '05:45 PM', totalHours: '9h 0m', status: 'present', location: 'Office' },
-  { id: '3', employeeName: 'Mike Johnson', date: 'Jan 30, 2026', punchIn: '10:15 AM', punchOut: '06:30 PM', totalHours: '8h 15m', status: 'late', location: 'Remote' },
-  { id: '4', employeeName: 'Sarah Wilson', date: 'Jan 30, 2026', punchIn: '-', punchOut: '-', totalHours: '-', status: 'absent', location: '-' },
-  { id: '5', employeeName: 'Tom Brown', date: 'Jan 30, 2026', punchIn: '09:05 AM', punchOut: '01:00 PM', totalHours: '4h 0m', status: 'half-day', location: 'Office' },
-  { id: '6', employeeName: 'Emily Davis', date: 'Jan 30, 2026', punchIn: '08:30 AM', punchOut: '05:30 PM', totalHours: '9h 0m', status: 'present', location: 'Office' },
-];
 
 interface AttendanceModuleProps {
   role: 'admin' | 'hr' | 'employee';
@@ -61,9 +57,95 @@ const getStatusBadge = (status: string) => {
 const AttendanceModule = ({ role }: AttendanceModuleProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [todayStatus, setTodayStatus] = useState<any>(null);
+  const { loading, execute } = useApi();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchAttendance();
+    if (role === 'employee') {
+      fetchTodayStatus();
+    }
+  }, [role]);
+
+  const fetchAttendance = async () => {
+    try {
+      const result = role === 'employee'
+        ? await execute(() => attendanceAPI.getMyAttendance())
+        : await execute(() => hrAPI.getTodayAttendance());
+      if (result?.data) {
+        setAttendanceData(Array.isArray(result.data) ? result.data : [result.data]);
+      }
+    } catch (error: any) {
+      const statusCode = error.response?.status;
+      const errorMessage = statusCode === 429 
+        ? 'Too many requests. Please wait a moment and try again.'
+        : statusCode === 404
+        ? 'Attendance endpoint not found. Please check backend configuration.'
+        : error.response?.data?.message || 'Failed to fetch attendance';
+      
+      console.error('Failed to fetch attendance:', error);
+      if (statusCode !== 429) {
+        toast({
+          title: 'Error',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const fetchTodayStatus = async () => {
+    try {
+      const result = await execute(() => attendanceAPI.getToday());
+      if (result?.data) {
+        setTodayStatus(result.data);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch today status:', error);
+    }
+  };
+
+  const handleCheckIn = async () => {
+    try {
+      await execute(() => attendanceAPI.checkIn());
+      toast({
+        title: 'Success',
+        description: 'Checked in successfully',
+      });
+      fetchTodayStatus();
+      fetchAttendance();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to check in',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCheckOut = async () => {
+    try {
+      await execute(() => attendanceAPI.checkOut());
+      toast({
+        title: 'Success',
+        description: 'Checked out successfully',
+      });
+      fetchTodayStatus();
+      fetchAttendance();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to check out',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredData = attendanceData.filter(record => {
-    const matchesSearch = record.employeeName.toLowerCase().includes(searchQuery.toLowerCase());
+    const employeeName = record.user?.name || record.employeeName || '';
+    const matchesSearch = employeeName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -190,31 +272,54 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData.map((record) => (
-                    <TableRow key={record.id} className="hover:bg-secondary/30">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                              {record.employeeName.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">{record.employeeName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{record.date}</TableCell>
-                      <TableCell>{record.punchIn}</TableCell>
-                      <TableCell>{record.punchOut}</TableCell>
-                      <TableCell>{record.totalHours}</TableCell>
-                      <TableCell>{getStatusBadge(record.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {record.location}
-                        </div>
+                  {loading && attendanceData.length === 0 ? (
+                    <TableRow key="loading">
+                      <TableCell colSpan={7} className="text-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : filteredData.length === 0 ? (
+                    <TableRow key="empty">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No attendance records found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredData.map((record) => {
+                      const employeeName = record.user?.name || record.employeeName || 'Unknown';
+                      const displayDate = new Date(record.date).toLocaleDateString();
+                      const checkIn = record.checkInTime || '-';
+                      const checkOut = record.checkOutTime || '-';
+                      const hours = record.totalHours || '-';
+                      const location = record.location || '-';
+                      
+                      return (
+                        <TableRow key={record._id} className="hover:bg-secondary/30">
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                                  {employeeName.split(' ').map((n, i) => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm font-medium">{employeeName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{displayDate}</TableCell>
+                          <TableCell>{checkIn}</TableCell>
+                          <TableCell>{checkOut}</TableCell>
+                          <TableCell>{hours}</TableCell>
+                          <TableCell>{getStatusBadge(record.status)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              <span className="text-xs">{location}</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>

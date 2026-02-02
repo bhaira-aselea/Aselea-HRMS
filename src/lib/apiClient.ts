@@ -64,15 +64,15 @@ export const employeeAPI = {
 
 // Leave APIs
 export const leaveAPI = {
-  getLeaves: (params?: any) => api.get('/leave', { params }),
-  createLeave: (data: any) => api.post('/leave', data),
-  getLeaveById: (id: string) => api.get(`/leave/${id}`),
-  approveLeave: (id: string) => api.put(`/leave/${id}/approve`),
+  getLeaves: (params?: any) => api.get('/leaves', { params }),
+  createLeave: (data: any) => api.post('/leaves', data),
+  getLeaveById: (id: string) => api.get(`/leaves/${id}`),
+  approveLeave: (id: string) => api.put(`/leaves/${id}/approve`),
   rejectLeave: (id: string, reason?: string) => 
-    api.put(`/leave/${id}/reject`, { reason }),
-  cancelLeave: (id: string) => api.put(`/leave/${id}/cancel`),
-  getBalance: () => api.get('/leave/balance'),
-  getStatistics: (params?: any) => api.get('/leave/statistics', { params }),
+    api.put(`/leaves/${id}/reject`, { reason }),
+  cancelLeave: (id: string) => api.put(`/leaves/${id}/cancel`),
+  getBalance: () => api.get('/leaves/balance'),
+  getStatistics: (params?: any) => api.get('/leaves/statistics', { params }),
 };
 
 // Attendance APIs

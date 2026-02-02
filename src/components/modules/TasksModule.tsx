@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,28 +19,26 @@ import {
   CheckCircle,
   Circle,
   Timer,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useApi } from '@/hooks/useApi';
+import { taskAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface Task {
-  id: string;
+  _id: string;
   title: string;
   description: string;
-  assignee: string;
-  deadline: string;
+  assignedTo?: { _id: string; name: string };
+  assignee?: string;
+  dueDate: string;
+  deadline?: string;
   progress: number;
   status: 'pending' | 'in-progress' | 'completed';
   priority: 'low' | 'medium' | 'high';
-  attachments: number;
+  attachments?: number;
 }
-
-const tasks: Task[] = [
-  { id: '1', title: 'Complete Q4 Financial Report', description: 'Prepare and submit the quarterly financial analysis report', assignee: 'John Doe', deadline: 'Feb 5, 2026', progress: 75, status: 'in-progress', priority: 'high', attachments: 2 },
-  { id: '2', title: 'Review Marketing Strategy', description: 'Analyze and provide feedback on the new marketing proposal', assignee: 'Jane Smith', deadline: 'Feb 3, 2026', progress: 30, status: 'in-progress', priority: 'medium', attachments: 1 },
-  { id: '3', title: 'Update Employee Handbook', description: 'Revise policies and update the employee handbook', assignee: 'Mike Johnson', deadline: 'Feb 10, 2026', progress: 100, status: 'completed', priority: 'low', attachments: 3 },
-  { id: '4', title: 'Prepare Training Materials', description: 'Create onboarding materials for new hires', assignee: 'Sarah Wilson', deadline: 'Feb 8, 2026', progress: 0, status: 'pending', priority: 'medium', attachments: 0 },
-  { id: '5', title: 'Client Presentation', description: 'Prepare slides for the upcoming client meeting', assignee: 'Tom Brown', deadline: 'Feb 2, 2026', progress: 50, status: 'in-progress', priority: 'high', attachments: 4 },
-];
 
 interface TasksModuleProps {
   role: 'admin' | 'hr' | 'employee';
@@ -74,6 +72,92 @@ const TasksModule = ({ role }: TasksModuleProps) => {
   const [filter, setFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    assignedTo: '',
+    priority: 'medium',
+    dueDate: '',
+  });
+  const { loading, execute } = useApi();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const result = await execute(() => taskAPI.getTasks());
+      if (result?.data) {
+        setTasks(result.data);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch tasks',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCreateTask = async () => {
+    if (!formData.title || !formData.description || !formData.dueDate) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await execute(() => taskAPI.createTask(formData));
+      toast({
+        title: 'Success',
+        description: 'Task created successfully',
+      });
+      setIsDialogOpen(false);
+      setFormData({ title: '', description: '', assignedTo: '', priority: 'medium', dueDate: '' });
+      fetchTasks();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create task',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUpdateProgress = async (taskId: string, newProgress: number) => {
+    try {
+      await execute(() => taskAPI.updateProgress(taskId, newProgress));
+      fetchTasks();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update progress',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await execute(() => taskAPI.deleteTask(taskId));
+      toast({
+        title: 'Success',
+        description: 'Task deleted',
+      });
+      fetchTasks();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete task',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredTasks = tasks.filter(task => {
     if (filter === 'all') return true;
@@ -173,16 +257,59 @@ const TasksModule = ({ role }: TasksModuleProps) => {
                       <div className="space-y-4 mt-4">
                         <div className="space-y-2">
                           <Label>Task Title</Label>
-                          <Input placeholder="Enter task title" className="bg-secondary border-border" />
+                          <Input 
+                            placeholder="Enter task title" 
+                            className="bg-secondary border-border"
+                            value={formData.title}
+                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Description</Label>
-                          <Textarea placeholder="Enter task description" className="bg-secondary border-border" />
+                          <Textarea 
+                            placeholder="Enter task description" 
+                            className="bg-secondary border-border"
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label>Assign To</Label>
-                            <Select>
+                            <Label>Assign To (User ID)</Label>
+                            <Input 
+                              placeholder="Employee ID" 
+                              className="bg-secondary border-border"
+                              value={formData.assignedTo}
+                              onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Priority</Label>
+                            <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value as 'low' | 'medium' | 'high' })}>
+                              <SelectTrigger className="bg-secondary border-border">
+                                <SelectValue placeholder="Priority" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Due Date</Label>
+                          <Input 
+                            type="date" 
+                            className="bg-secondary border-border"
+                            value={formData.dueDate}
+                            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                          />
+                        </div>
+                        <Button className="w-full glow-button" onClick={handleCreateTask} disabled={loading}>
+                          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</> : 'Create Task'}
+                        </Button>
+                      </div>
                               <SelectTrigger className="bg-secondary border-border">
                                 <SelectValue placeholder="Select employee" />
                               </SelectTrigger>
@@ -195,7 +322,7 @@ const TasksModule = ({ role }: TasksModuleProps) => {
                           </div>
                           <div className="space-y-2">
                             <Label>Priority</Label>
-                            <Select>
+                            <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value as 'low' | 'medium' | 'high' })}>
                               <SelectTrigger className="bg-secondary border-border">
                                 <SelectValue placeholder="Select priority" />
                               </SelectTrigger>
@@ -208,11 +335,16 @@ const TasksModule = ({ role }: TasksModuleProps) => {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label>Deadline</Label>
-                          <Input type="date" className="bg-secondary border-border" />
+                          <Label>Due Date</Label>
+                          <Input 
+                            type="date" 
+                            className="bg-secondary border-border"
+                            value={formData.dueDate}
+                            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                          />
                         </div>
-                        <Button className="w-full glow-button" onClick={() => setIsDialogOpen(false)}>
-                          Create Task
+                        <Button className="w-full glow-button" onClick={handleCreateTask} disabled={loading}>
+                          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</> : 'Create Task'}
                         </Button>
                       </div>
                     </DialogContent>
@@ -222,13 +354,26 @@ const TasksModule = ({ role }: TasksModuleProps) => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="p-4 rounded-lg bg-secondary/50 border border-border hover:border-primary/30 transition-colors cursor-pointer"
-                  onClick={() => setSelectedTask(task)}
-                >
+            {loading && tasks.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No tasks found
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredTasks.map((task) => {
+                  const assigneeName = task.assignedTo?.name || task.assignee || 'Unassigned';
+                  const deadline = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : (task.deadline || 'No deadline');
+                  
+                  return (
+                    <div
+                      key={task._id}
+                      className="p-4 rounded-lg bg-secondary/50 border border-border hover:border-primary/30 transition-colors cursor-pointer"
+                      onClick={() => setSelectedTask(task)}
+                    >
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                     <div className="flex items-start gap-3 flex-1">
                       {getStatusIcon(task.status)}
@@ -242,21 +387,15 @@ const TasksModule = ({ role }: TasksModuleProps) => {
                           <div className="flex items-center gap-1">
                             <Avatar className="h-5 w-5">
                               <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
-                                {task.assignee.split(' ').map(n => n[0]).join('')}
+                                {assigneeName.split(' ').map(n => n[0]).join('')}
                               </AvatarFallback>
                             </Avatar>
-                            {task.assignee}
+                            {assigneeName}
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {task.deadline}
+                            {deadline}
                           </div>
-                          {task.attachments > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Upload className="h-3 w-3" />
-                              {task.attachments} files
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>

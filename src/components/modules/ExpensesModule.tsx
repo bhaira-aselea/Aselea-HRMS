@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,26 +19,24 @@ import {
   Clock,
   DollarSign,
   FileText,
+  Loader2,
 } from 'lucide-react';
+import { useApi } from '@/hooks/useApi';
+import { expenseAPI } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface Expense {
-  id: string;
-  employeeName: string;
+  _id: string;
+  employee?: { name: string };
+  employeeName?: string;
   category: string;
   amount: number;
   description: string;
   date: string;
   status: 'pending' | 'approved' | 'rejected';
-  receipt: boolean;
+  receipt?: boolean;
+  receiptUrl?: string;
 }
-
-const expenses: Expense[] = [
-  { id: '1', employeeName: 'John Doe', category: 'Travel', amount: 450, description: 'Client meeting travel expenses', date: 'Jan 28, 2026', status: 'pending', receipt: true },
-  { id: '2', employeeName: 'Jane Smith', category: 'Meals', amount: 85, description: 'Team lunch meeting', date: 'Jan 27, 2026', status: 'approved', receipt: true },
-  { id: '3', employeeName: 'Mike Johnson', category: 'Supplies', amount: 120, description: 'Office supplies purchase', date: 'Jan 25, 2026', status: 'pending', receipt: true },
-  { id: '4', employeeName: 'Sarah Wilson', category: 'Training', amount: 299, description: 'Online course subscription', date: 'Jan 24, 2026', status: 'rejected', receipt: false },
-  { id: '5', employeeName: 'Tom Brown', category: 'Equipment', amount: 650, description: 'Ergonomic keyboard and mouse', date: 'Jan 23, 2026', status: 'approved', receipt: true },
-];
 
 interface ExpensesModuleProps {
   role: 'admin' | 'hr' | 'employee';
@@ -60,6 +58,98 @@ const getStatusBadge = (status: string) => {
 const ExpensesModule = ({ role }: ExpensesModuleProps) => {
   const [filter, setFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [formData, setFormData] = useState({
+    category: '',
+    amount: '',
+    description: '',
+    date: '',
+  });
+  const { loading, execute } = useApi();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchExpenses();
+  }, []);
+
+  const fetchExpenses = async () => {
+    try {
+      const result = await execute(() => expenseAPI.getExpenses());
+      if (result?.data) {
+        setExpenses(result.data);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to fetch expenses',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCreateExpense = async () => {
+    if (!formData.category || !formData.amount || !formData.date) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await execute(() => expenseAPI.createExpense({
+        ...formData,
+        amount: Number(formData.amount),
+      }));
+      toast({
+        title: 'Success',
+        description: 'Expense claim submitted successfully',
+      });
+      setIsDialogOpen(false);
+      setFormData({ category: '', amount: '', description: '', date: '' });
+      fetchExpenses();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create expense',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      await execute(() => expenseAPI.approveExpense(id));
+      toast({
+        title: 'Success',
+        description: 'Expense approved',
+      });
+      fetchExpenses();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to approve expense',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await execute(() => expenseAPI.rejectExpense(id, 'Rejected'));
+      toast({
+        title: 'Success',
+        description: 'Expense rejected',
+      });
+      fetchExpenses();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to reject expense',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredExpenses = expenses.filter(expense => {
     if (filter === 'all') return true;
@@ -176,44 +266,52 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                       <div className="space-y-4 mt-4">
                         <div className="space-y-2">
                           <Label>Category</Label>
-                          <Select>
+                          <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                             <SelectTrigger className="bg-secondary border-border">
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="travel">Travel</SelectItem>
-                              <SelectItem value="meals">Meals</SelectItem>
-                              <SelectItem value="supplies">Supplies</SelectItem>
-                              <SelectItem value="equipment">Equipment</SelectItem>
-                              <SelectItem value="training">Training</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
+                              <SelectItem value="Travel">Travel</SelectItem>
+                              <SelectItem value="Meals">Meals</SelectItem>
+                              <SelectItem value="Supplies">Supplies</SelectItem>
+                              <SelectItem value="Equipment">Equipment</SelectItem>
+                              <SelectItem value="Training">Training</SelectItem>
+                              <SelectItem value="Other">Other</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label>Amount ($)</Label>
-                            <Input type="number" placeholder="0.00" className="bg-secondary border-border" />
+                            <Input 
+                              type="number" 
+                              placeholder="0.00" 
+                              className="bg-secondary border-border"
+                              value={formData.amount}
+                              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label>Date</Label>
-                            <Input type="date" className="bg-secondary border-border" />
+                            <Input 
+                              type="date" 
+                              className="bg-secondary border-border"
+                              value={formData.date}
+                              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                            />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label>Description</Label>
-                          <Textarea placeholder="Enter expense description" className="bg-secondary border-border" />
+                          <Textarea 
+                            placeholder="Describe the expense" 
+                            className="bg-secondary border-border"
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          />
                         </div>
-                        <div className="space-y-2">
-                          <Label>Receipt</Label>
-                          <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                            <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                            <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
-                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, PDF up to 10MB</p>
-                          </div>
-                        </div>
-                        <Button className="w-full glow-button" onClick={() => setIsDialogOpen(false)}>
-                          Submit Expense
+                        <Button className="w-full glow-button" onClick={handleCreateExpense} disabled={loading}>
+                          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</> : 'Submit Expense'}
                         </Button>
                       </div>
                     </DialogContent>
