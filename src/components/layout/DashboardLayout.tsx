@@ -309,9 +309,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 </div>
                 <ScrollArea className="max-h-[400px]">
                   <div className="p-2">
-                    {recentAnnouncements.map((announcement) => (
+                    {recentAnnouncements.map((announcement, index) => (
                       <div
-                        key={announcement.id}
+                        key={announcement._id || announcement.id || `announcement-${index}`}
                         className="p-3 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer mb-2"
                         onClick={() => {
                           setNotificationOpen(false);

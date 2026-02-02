@@ -26,8 +26,10 @@ import {
   XCircle,
   Clock3,
   Loader2,
+  FileText,
+  ExternalLink,
 } from 'lucide-react';
-import { hrAPI, leaveAPI } from '@/lib/apiClient';
+import { hrAPI, leaveAPI, expenseAPI } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 
 const HRDashboard = () => {
@@ -40,6 +42,11 @@ const HRDashboard = () => {
   const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [expenseRejectDialogOpen, setExpenseRejectDialogOpen] = useState(false);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
+  const [expenseRejectReason, setExpenseRejectReason] = useState('');
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchDashboard = useCallback(async () => {
@@ -127,6 +134,62 @@ const HRDashboard = () => {
   const openRejectDialog = (leaveId: string) => {
     setSelectedLeaveId(leaveId);
     setRejectDialogOpen(true);
+  };
+
+  const handleApproveExpense = async (expenseId: string) => {
+    console.log('Approving expense:', expenseId);
+    try {
+      setActionLoading(true);
+      await expenseAPI.approveExpense(expenseId);
+      toast({
+        title: 'Success',
+        description: 'Expense approved successfully',
+      });
+      fetchDashboard();
+    } catch (error: any) {
+      console.error('Approve expense error:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to approve expense',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectExpense = async () => {
+    console.log('Rejecting expense:', selectedExpenseId, 'Reason:', expenseRejectReason);
+    if (!selectedExpenseId || !expenseRejectReason.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please provide a reason for rejection',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await expenseAPI.rejectExpense(selectedExpenseId, expenseRejectReason);
+      toast({
+        title: 'Success',
+        description: 'Expense rejected successfully',
+      });
+      setExpenseRejectDialogOpen(false);
+      setExpenseRejectReason('');
+      setSelectedExpenseId(null);
+      fetchDashboard();
+    } catch (error: any) {
+      console.error('Reject expense error:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to reject expense',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -282,16 +345,53 @@ const HRDashboard = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">${expense.amount}</p>
+                      <p className="text-sm font-medium text-foreground">₹{expense.amount}</p>
                       <p className="text-xs text-muted-foreground">
                         {employeeName} • {expense.description}
                       </p>
+                      {expense.receipt?.url && (
+                        <Button
+                          size="sm"
+                          variant="link"
+                          className="text-xs p-0 h-auto text-primary hover:text-primary/80 mt-1"
+                          onClick={() => {
+                            setSelectedReceipt(expense.receipt.url);
+                            setReceiptDialogOpen(true);
+                          }}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          View Bill Photo
+                        </Button>
+                      )}
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" className="text-success hover:text-success hover:bg-success/10">
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-success hover:text-success hover:bg-success/10"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Approve button clicked for expense:', expense._id || expense.id);
+                          handleApproveExpense(expense._id || expense.id);
+                        }}
+                        disabled={actionLoading}
+                      >
                         <CheckCircle className="h-4 w-4" />
                       </Button>
-                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Reject button clicked for expense:', expense._id || expense.id);
+                          setSelectedExpenseId(expense._id || expense.id);
+                          setExpenseRejectDialogOpen(true);
+                        }}
+                        disabled={actionLoading}
+                      >
                         <XCircle className="h-4 w-4" />
                       </Button>
                     </div>
@@ -422,6 +522,99 @@ const HRDashboard = () => {
               ) : (
                 'Reject Leave'
               )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Reject Dialog */}
+      <Dialog open={expenseRejectDialogOpen} onOpenChange={setExpenseRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Expense</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this expense claim.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="expense-reason">Rejection Reason</Label>
+              <Input
+                id="expense-reason"
+                placeholder="Enter reason for rejection..."
+                value={expenseRejectReason}
+                onChange={(e) => setExpenseRejectReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setExpenseRejectDialogOpen(false);
+                setExpenseRejectReason('');
+                setSelectedExpenseId(null);
+              }}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRejectExpense}
+              disabled={actionLoading || !expenseRejectReason.trim()}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                'Reject Expense'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt/Bill Photo Viewing Dialog */}
+      <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Bill Photo / Receipt</DialogTitle>
+            <DialogDescription>
+              Uploaded receipt for expense claim
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedReceipt && (
+              <div className="relative w-full">
+                <img
+                  src={selectedReceipt}
+                  alt="Receipt"
+                  className="w-full h-auto max-h-[70vh] object-contain rounded-lg border border-border"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={() => window.open(selectedReceipt, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open in New Tab
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReceiptDialogOpen(false);
+                setSelectedReceipt(null);
+              }}
+            >
+              Close
             </Button>
           </div>
         </DialogContent>

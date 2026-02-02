@@ -20,6 +20,7 @@ import {
   DollarSign,
   FileText,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { expenseAPI } from '@/lib/apiClient';
@@ -27,6 +28,8 @@ import { useToast } from '@/hooks/use-toast';
 
 interface Expense {
   _id: string;
+  id?: string;
+  user?: { name: string };
   employee?: { name: string };
   employeeName?: string;
   category: string;
@@ -34,8 +37,10 @@ interface Expense {
   description: string;
   date: string;
   status: 'pending' | 'approved' | 'rejected';
-  receipt?: boolean;
-  receiptUrl?: string;
+  receipt?: {
+    url?: string;
+    publicId?: string;
+  };
 }
 
 interface ExpensesModuleProps {
@@ -67,6 +72,12 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
     description: '',
     date: '',
   });
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const { loading, execute } = useApi();
   const { toast } = useToast();
 
@@ -130,7 +141,8 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
 
   const handleApprove = async (id: string) => {
     try {
-      await execute(() => expenseAPI.approveExpense(id));
+      setActionLoading(true);
+      await expenseAPI.approveExpense(id);
       toast({
         title: 'Success',
         description: 'Expense approved',
@@ -142,16 +154,23 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
         description: error.response?.data?.message || 'Failed to approve expense',
         variant: 'destructive',
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleReject = async (id: string) => {
+  const handleReject = async () => {
+    if (!selectedExpenseId) return;
     try {
-      await execute(() => expenseAPI.rejectExpense(id, 'Rejected'));
+      setActionLoading(true);
+      await expenseAPI.rejectExpense(selectedExpenseId, rejectReason || 'Rejected by HR');
       toast({
         title: 'Success',
         description: 'Expense rejected',
       });
+      setRejectDialogOpen(false);
+      setSelectedExpenseId(null);
+      setRejectReason('');
       fetchExpenses();
     } catch (error: any) {
       toast({
@@ -159,6 +178,8 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
         description: error.response?.data?.message || 'Failed to reject expense',
         variant: 'destructive',
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -392,7 +413,7 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                       </Avatar>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">${expense.amount}</p>
+                          <p className="font-medium text-foreground">₹{expense.amount}</p>
                           <Badge variant="outline" className="text-xs">{expense.category}</Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">{expense.description}</p>
@@ -400,13 +421,21 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                           <span>{employeeName}</span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {expense.date}
+                            {new Date(expense.date).toLocaleDateString()}
                           </span>
-                          {expense.receipt && (
-                            <span className="flex items-center gap-1 text-success">
-                              <FileText className="h-3 w-3" />
-                              Receipt
-                            </span>
+                          {expense.receipt?.url && (
+                            <Button
+                              size="sm"
+                              variant="link"
+                              className="text-xs p-0 h-auto text-primary hover:text-primary/80"
+                              onClick={() => {
+                                setSelectedReceipt(expense.receipt?.url || null);
+                                setReceiptDialogOpen(true);
+                              }}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              View Bill Photo
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -415,10 +444,25 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
                       {getStatusBadge(expense.status)}
                       {canApprove && expense.status === 'pending' && (
                         <div className="flex gap-2">
-                          <Button size="sm" variant="ghost" className="text-success hover:text-success hover:bg-success/10">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-success hover:text-success hover:bg-success/10"
+                            onClick={() => handleApprove(expense._id || expense.id || '')}
+                            disabled={actionLoading}
+                          >
                             <CheckCircle className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              setSelectedExpenseId(expense._id || expense.id || null);
+                              setRejectDialogOpen(true);
+                            }}
+                            disabled={actionLoading}
+                          >
                             <XCircle className="h-4 w-4" />
                           </Button>
                         </div>
@@ -432,6 +476,99 @@ const ExpensesModule = ({ role }: ExpensesModuleProps) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Receipt/Bill Photo Viewing Dialog */}
+      <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Bill Photo / Receipt</DialogTitle>
+            <DialogDescription>
+              Uploaded receipt for expense claim
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedReceipt && (
+              <div className="relative w-full">
+                <img
+                  src={selectedReceipt}
+                  alt="Receipt"
+                  className="w-full h-auto max-h-[70vh] object-contain rounded-lg border border-border"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={() => window.open(selectedReceipt, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open in New Tab
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReceiptDialogOpen(false);
+                setSelectedReceipt(null);
+              }}
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Expense Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Expense</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this expense claim.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reject-reason">Rejection Reason</Label>
+              <Input
+                id="reject-reason"
+                placeholder="Enter reason for rejection..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectDialogOpen(false);
+                setRejectReason('');
+                setSelectedExpenseId(null);
+              }}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                'Reject Expense'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
