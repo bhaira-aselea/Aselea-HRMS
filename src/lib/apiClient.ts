@@ -78,14 +78,41 @@ export const leaveAPI = {
 
 // Attendance APIs
 export const attendanceAPI = {
-  checkIn: (location?: any) => api.post('/attendance/check-in', { location }),
-  checkOut: () => api.post('/attendance/check-out'),
+  // Check in with optional photo (FormData for photo upload)
+  checkIn: (location?: any, photoFile?: File) => {
+    // If photo is provided, use FormData
+    if (photoFile) {
+      const formData = new FormData();
+      formData.append('photo', photoFile);
+      if (location) {
+        formData.append('location', JSON.stringify(location));
+      }
+      return api.post('/attendance/check-in', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+    // Otherwise, just send location as JSON
+    return api.post('/attendance/check-in', { location });
+  },
+  checkOut: (location?: any) => api.post('/attendance/check-out', { location }),
   getToday: () => api.get('/attendance/today'),
   getMyAttendance: (params?: any) => api.get('/attendance/my-attendance', { params }),
   getSummary: (params?: any) => api.get('/attendance/summary', { params }),
   getEmployeeAttendance: (employeeId: string, params?: any) => 
     api.get(`/attendance/employee/${employeeId}`, { params }),
   getCompanySummary: (params?: any) => api.get('/attendance/company-summary', { params }),
+  
+  // Attendance Edit Requests
+  createEditRequest: (data: {
+    attendanceId: string;
+    requestedCheckIn: string;
+    requestedCheckOut: string;
+    reason: string;
+  }) => api.post('/attendance/edit-request', data),
+  getMyEditRequests: () => api.get('/attendance/edit-requests'),
+  getPendingEditRequests: () => api.get('/attendance/edit-requests/pending'),
+  reviewEditRequest: (requestId: string, action: 'approved' | 'rejected', reviewNote?: string) =>
+    api.put(`/attendance/edit-requests/${requestId}`, { action, reviewNote }),
 };
 
 // Task APIs

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Clock,
   Calendar as CalendarIcon,
@@ -25,48 +25,42 @@ import {
   Send,
   Loader2,
   MapPin,
+  Camera,
+  Image,
+  X,
 } from 'lucide-react';
 import { attendanceAPI } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 
 interface TodayAttendance {
   _id?: string;
-  checkInTime?: string;
-  checkOutTime?: string;
-  status: 'present' | 'absent' | 'late' | 'on-leave';
-  location?: {
-    checkIn?: { latitude: number; longitude: number; address?: string };
-    checkOut?: { latitude: number; longitude: number; address?: string };
-  };
-}
-
-interface DailyAttendance {
-  _id: string;
-  date: string;
-  checkInTime: string | null;
-  checkOutTime: string | null;
-  status: 'present' | 'absent' | 'late' | 'on-leave';
-  duration?: number;
   checkIn?: {
     time?: string;
     location?: { latitude: number; longitude: number; address?: string };
+    photo?: { url: string; publicId: string; capturedAt: string };
   };
   checkOut?: {
     time?: string;
     location?: { latitude: number; longitude: number; address?: string };
   };
+  status: 'present' | 'absent' | 'late' | 'on-leave';
+  workHours?: number;
 }
 
-interface AttendanceEditRequest {
-  id: string;
+interface DailyAttendance {
+  _id: string;
   date: string;
-  originalPunchIn: string | null;
-  originalPunchOut: string | null;
-  requestedPunchIn: string;
-  requestedPunchOut: string;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  submittedAt: string;
+  checkIn?: {
+    time?: string;
+    location?: { latitude: number; longitude: number; address?: string };
+    photo?: { url: string; publicId: string; capturedAt: string };
+  };
+  checkOut?: {
+    time?: string;
+    location?: { latitude: number; longitude: number; address?: string };
+  };
+  status: 'present' | 'absent' | 'late' | 'on-leave' | 'half-day';
+  workHours?: number;
 }
 
 const EmployeeAttendance = () => {
@@ -87,6 +81,19 @@ const EmployeeAttendance = () => {
     punchOut: '',
     reason: '',
   });
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+  
+  // Camera state
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [capturedPhotoFile, setCapturedPhotoFile] = useState<File | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  
+  // Photo preview state
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
   
   useEffect(() => {
     fetchTodayAttendance();
@@ -149,9 +156,73 @@ const EmployeeAttendance = () => {
         },
         (error) => {
           reject(error);
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     });
+  };
+
+  // Camera functions
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 640, height: 480 }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setShowCamera(true);
+    } catch (error) {
+      console.error('Camera error:', error);
+      toast({
+        title: 'Camera Error',
+        description: 'Could not access camera. Please allow camera permissions.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
+  }, []);
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `checkin-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            setCapturedPhotoFile(file);
+            setCapturedPhoto(canvas.toDataURL('image/jpeg'));
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.8);
+      }
+    }
+  };
+
+  const retakePhoto = () => {
+    setCapturedPhoto(null);
+    setCapturedPhotoFile(null);
+    startCamera();
+  };
+
+  const openPhotoPreview = (photoUrl: string) => {
+    setPhotoPreviewUrl(photoUrl);
+    setShowPhotoPreview(true);
   };
 
   const handlePunchIn = async () => {
@@ -174,13 +245,20 @@ const EmployeeAttendance = () => {
         });
       }
 
-      await attendanceAPI.checkIn(location);
+      // Call API with photo if captured
+      await attendanceAPI.checkIn(location, capturedPhotoFile || undefined);
+      
       toast({
         title: 'Success',
         description: 'Checked in successfully!',
       });
-      fetchTodayAttendance();
-      fetchMonthAttendance();
+      
+      // Reset camera state
+      setCapturedPhoto(null);
+      setCapturedPhotoFile(null);
+      
+      await fetchTodayAttendance();
+      await fetchMonthAttendance();
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -195,13 +273,21 @@ const EmployeeAttendance = () => {
   const handlePunchOut = async () => {
     try {
       setPunchingOut(true);
-      await attendanceAPI.checkOut();
+      
+      let location;
+      try {
+        location = await getLocation();
+      } catch (error) {
+        console.error('Location error:', error);
+      }
+      
+      await attendanceAPI.checkOut(location);
       toast({
         title: 'Success',
         description: 'Checked out successfully!',
       });
-      fetchTodayAttendance();
-      fetchMonthAttendance();
+      await fetchTodayAttendance();
+      await fetchMonthAttendance();
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -313,8 +399,8 @@ const EmployeeAttendance = () => {
 
   const openEditDialog = (record: DailyAttendance) => {
     setSelectedRecord(record);
-    const checkInTime = record.checkInTime ? new Date(record.checkInTime) : null;
-    const checkOutTime = record.checkOutTime ? new Date(record.checkOutTime) : null;
+    const checkInTime = record.checkIn?.time ? new Date(record.checkIn.time) : null;
+    const checkOutTime = record.checkOut?.time ? new Date(record.checkOut.time) : null;
     
     setEditFormData({
       punchIn: checkInTime ? `${String(checkInTime.getHours()).padStart(2, '0')}:${String(checkInTime.getMinutes()).padStart(2, '0')}` : '',
@@ -324,37 +410,150 @@ const EmployeeAttendance = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleSubmitEditRequest = () => {
-    // Here you would send the edit request to the backend
-    console.log('Submitting edit request:', {
-      date: selectedRecord?.date,
-      originalPunchIn: selectedRecord?.checkInTime,
-      originalPunchOut: selectedRecord?.checkOutTime,
-      requestedPunchIn: editFormData.punchIn,
-      requestedPunchOut: editFormData.punchOut,
-      reason: editFormData.reason,
+  const handleSubmitEditRequest = async () => {
+    if (!selectedRecord || !editFormData.reason || !editFormData.punchIn || !editFormData.punchOut) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (editFormData.reason.length < 10) {
+      toast({
+        title: 'Error',
+        description: 'Reason must be at least 10 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setSubmittingEdit(true);
+      
+      // Build full datetime from record date + requested time
+      const recordDate = new Date(selectedRecord.date);
+      const [inHours, inMins] = editFormData.punchIn.split(':');
+      const [outHours, outMins] = editFormData.punchOut.split(':');
+      
+      const requestedCheckIn = new Date(recordDate);
+      requestedCheckIn.setHours(parseInt(inHours), parseInt(inMins), 0, 0);
+      
+      const requestedCheckOut = new Date(recordDate);
+      requestedCheckOut.setHours(parseInt(outHours), parseInt(outMins), 0, 0);
+      
+      await attendanceAPI.createEditRequest({
+        attendanceId: selectedRecord._id,
+        requestedCheckIn: requestedCheckIn.toISOString(),
+        requestedCheckOut: requestedCheckOut.toISOString(),
+        reason: editFormData.reason,
+      });
+      
+      toast({
+        title: 'Success',
+        description: 'Edit request submitted! HR will review your request.',
+      });
+      
+      setIsEditDialogOpen(false);
+      setSelectedRecord(null);
+      setEditFormData({ punchIn: '', punchOut: '', reason: '' });
+      
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to submit edit request',
+        variant: 'destructive',
+      });
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+  
+  // Helper variables for checked in/out status
+  const hasCheckedIn = !!todayAttendance?.checkIn?.time;
+  const hasCheckedOut = !!todayAttendance?.checkOut?.time;
+
+  // Format time helper
+  const formatTime = (timeValue: string | undefined) => {
+    if (!timeValue) return '-';
+    return new Date(timeValue).toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
     });
-    
-    // Show success message
-    alert('Attendance edit request submitted successfully! HR will review your request.');
-    
-    setIsEditDialogOpen(false);
-    setSelectedRecord(null);
-    setEditFormData({ punchIn: '', punchOut: '', reason: '' });
+  };
+
+  // Format work hours
+  const formatDuration = (workHours: number | undefined) => {
+    if (!workHours) return '-';
+    const hours = Math.floor(workHours);
+    const minutes = Math.round((workHours - hours) * 60);
+    return `${hours}h ${minutes}m`;
   };
   
   return (
     <DashboardLayout>
       <div className="space-y-6 fade-in">
+        {/* Camera Modal */}
+        <Dialog open={showCamera} onOpenChange={(open) => !open && stopCamera()}>
+          <DialogContent className="glass-card max-w-md">
+            <DialogHeader>
+              <DialogTitle>Capture Check-in Photo</DialogTitle>
+              <DialogDescription>
+                Position yourself in the frame and click capture
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <canvas ref={canvasRef} className="hidden" />
+              <div className="flex justify-center gap-3">
+                <Button variant="outline" onClick={stopCamera}>
+                  Cancel
+                </Button>
+                <Button className="glow-button" onClick={capturePhoto}>
+                  <Camera className="h-4 w-4 mr-2" />
+                  Capture
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Photo Preview Modal */}
+        <Dialog open={showPhotoPreview} onOpenChange={setShowPhotoPreview}>
+          <DialogContent className="glass-card max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Check-in Photo</DialogTitle>
+            </DialogHeader>
+            {photoPreviewUrl && (
+              <div className="rounded-lg overflow-hidden">
+                <img 
+                  src={photoPreviewUrl} 
+                  alt="Check-in photo" 
+                  className="w-full h-auto"
+                />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
         {/* Top Status Banner */}
         <Card className="glass-card border-primary/30">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                  todayAttendance?.checkInTime ? 'bg-success/20' : 'bg-destructive/20'
+                  hasCheckedIn ? 'bg-success/20' : 'bg-destructive/20'
                 }`}>
-                  {todayAttendance?.checkInTime ? (
+                  {hasCheckedIn ? (
                     <CheckCircle className="h-8 w-8 text-success" />
                   ) : (
                     <Clock className="h-8 w-8 text-destructive" />
@@ -362,34 +561,82 @@ const EmployeeAttendance = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    {todayAttendance?.checkInTime ? 'Checked In' : 'Not Checked In'}
+                    {hasCheckedOut ? 'Day Complete' : hasCheckedIn ? 'Checked In' : 'Not Checked In'}
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {todayAttendance?.checkInTime 
-                      ? `Check in time: ${new Date(todayAttendance.checkInTime).toLocaleTimeString()} • Today` 
-                      : 'Mark your attendance for today'}
+                    {hasCheckedIn 
+                      ? `Check in: ${formatTime(todayAttendance?.checkIn?.time)}${hasCheckedOut ? ` • Check out: ${formatTime(todayAttendance?.checkOut?.time)}` : ' • Today'}`
+                      : capturedPhoto 
+                        ? 'Photo captured! Click "Confirm Check In" to proceed'
+                        : 'Take a selfie photo to mark attendance'}
                   </p>
+                  {hasCheckedOut && todayAttendance?.workHours && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Total: {formatDuration(todayAttendance.workHours)}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button 
-                  className={todayAttendance?.checkInTime && !todayAttendance?.checkOutTime ? 'bg-destructive hover:bg-destructive/90' : 'glow-button'}
-                  size="lg"
-                  onClick={todayAttendance?.checkInTime && !todayAttendance?.checkOutTime ? handlePunchOut : handlePunchIn}
-                  disabled={todayAttendance?.checkOutTime !== undefined}
-                >
-                  {todayAttendance?.checkInTime && !todayAttendance?.checkOutTime ? (
-                    <>
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Check Out
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="h-4 w-4 mr-2" />
-                      Check In
-                    </>
-                  )}
-                </Button>
+                {/* Camera capture before check-in */}
+                {/* Camera capture - Required before check-in */}
+                {!hasCheckedIn && !capturedPhoto && (
+                  <Button className="glow-button" size="lg" onClick={startCamera}>
+                    <Camera className="h-4 w-4 mr-2" />
+                    Take Photo to Check In
+                  </Button>
+                )}
+                
+                {/* Show captured photo preview */}
+                {capturedPhoto && !hasCheckedIn && (
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <img 
+                        src={capturedPhoto} 
+                        alt="Captured" 
+                        className="h-12 w-12 rounded-lg object-cover border-2 border-success"
+                      />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="absolute -top-2 -right-2 h-5 w-5 bg-destructive text-white rounded-full p-0"
+                        onClick={retakePhoto}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <span className="text-xs text-success">Photo ready</span>
+                  </div>
+                )}
+
+                {/* Check In Button - Only shows after photo is captured */}
+                {!hasCheckedIn && capturedPhoto && (
+                  <Button 
+                    className="glow-button"
+                    size="lg"
+                    onClick={handlePunchIn}
+                    disabled={punchingIn}
+                  >
+                    {punchingIn && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Confirm Check In
+                  </Button>
+                )}
+
+                {/* Check Out Button */}
+                {hasCheckedIn && !hasCheckedOut && (
+                  <Button 
+                    className="bg-destructive hover:bg-destructive/90"
+                    size="lg"
+                    onClick={handlePunchOut}
+                    disabled={punchingOut}
+                  >
+                    {punchingOut && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Check Out
+                  </Button>
+                )}
+                
                 <Button variant="outline" size="lg" className="glass-card" onClick={() => navigate('/employee/leave')}>
                   <FileText className="h-4 w-4 mr-2" />
                   Apply Leave
@@ -574,12 +821,27 @@ const EmployeeAttendance = () => {
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Check In</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Check Out</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Duration</th>
+                      <th className="text-left p-4 text-sm font-semibold text-foreground">Photo</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Location</th>
                       <th className="text-left p-4 text-sm font-semibold text-foreground">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {monthAttendance.filter(d => d.status !== null).reverse().map((record) => {
+                    {loading ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                          <p className="text-muted-foreground">Loading attendance records...</p>
+                        </td>
+                      </tr>
+                    ) : monthAttendance.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                          No attendance records found for this month
+                        </td>
+                      </tr>
+                    ) : (
+                      [...monthAttendance].reverse().map((record) => {
                       const date = new Date(record.date);
                       const formattedDate = date.toLocaleDateString('en-US', { 
                         month: 'short', 
@@ -588,29 +850,36 @@ const EmployeeAttendance = () => {
                       });
                       
                       return (
-                        <tr key={record.date} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                        <tr key={record._id} className="border-b border-border hover:bg-secondary/30 transition-colors">
                           <td className="p-4 text-sm text-muted-foreground">{formattedDate}</td>
                           <td className="p-4">{getStatusBadge(record.status)}</td>
                           <td className="p-4 text-sm">
-                            {record.checkInTime ? (
-                              <span className="text-foreground font-medium">
-                                {new Date(record.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+                            <span className="text-foreground font-medium">
+                              {formatTime(record.checkIn?.time)}
+                            </span>
                           </td>
                           <td className="p-4 text-sm">
-                            {record.checkOutTime ? (
-                              <span className="text-foreground font-medium">
-                                {new Date(record.checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
+                            <span className="text-foreground font-medium">
+                              {formatTime(record.checkOut?.time)}
+                            </span>
+                          </td>
+                          <td className="p-4 text-sm text-foreground font-medium">
+                            {formatDuration(record.workHours)}
+                          </td>
+                          <td className="p-4 text-sm">
+                            {record.checkIn?.photo?.url ? (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => openPhotoPreview(record.checkIn!.photo!.url)}
+                                className="text-primary hover:text-primary/80"
+                              >
+                                <Image className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
-                          </td>
-                          <td className="p-4 text-sm text-foreground font-medium">
-                            {record.duration ? `${Math.floor(record.duration / 60)}h ${record.duration % 60}m` : '-'}
                           </td>
                           <td className="p-4 text-sm">
                             {record.checkIn?.location ? (
@@ -629,7 +898,7 @@ const EmployeeAttendance = () => {
                             )}
                           </td>
                           <td className="p-4">
-                            {record.status === 'present' || record.status === 'late' ? (
+                            {['present', 'late', 'half-day'].includes(record.status) ? (
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -644,7 +913,8 @@ const EmployeeAttendance = () => {
                           </td>
                         </tr>
                       );
-                    })}
+                    })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -674,13 +944,17 @@ const EmployeeAttendance = () => {
                   <div>
                     <span className="text-muted-foreground">Check In: </span>
                     <span className="text-foreground font-medium">
-                      {selectedRecord?.checkInTime ? new Date(selectedRecord.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Not recorded'}
+                      {selectedRecord?.checkIn?.time 
+                        ? formatTime(selectedRecord.checkIn.time) 
+                        : 'Not recorded'}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Check Out: </span>
                     <span className="text-foreground font-medium">
-                      {selectedRecord?.checkOutTime ? new Date(selectedRecord.checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Not recorded'}
+                      {selectedRecord?.checkOut?.time 
+                        ? formatTime(selectedRecord.checkOut.time) 
+                        : 'Not recorded'}
                     </span>
                   </div>
                 </div>
@@ -689,7 +963,7 @@ const EmployeeAttendance = () => {
               {/* Requested Times */}
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label htmlFor="punchIn">Corrected Check In Time</Label>
+                  <Label htmlFor="punchIn">Corrected Check In Time <span className="text-destructive">*</span></Label>
                   <Input
                     id="punchIn"
                     type="time"
@@ -699,7 +973,7 @@ const EmployeeAttendance = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="punchOut">Corrected Check Out Time</Label>
+                  <Label htmlFor="punchOut">Corrected Check Out Time <span className="text-destructive">*</span></Label>
                   <Input
                     id="punchOut"
                     type="time"
@@ -712,11 +986,14 @@ const EmployeeAttendance = () => {
                   <Label htmlFor="reason">Reason for Edit Request <span className="text-destructive">*</span></Label>
                   <Textarea
                     id="reason"
-                    placeholder="Explain why you need to edit this attendance record (e.g., forgot to check in/out, system error, etc.)"
+                    placeholder="Explain why you need to edit this attendance record (minimum 10 characters)"
                     className="bg-secondary border-border min-h-[100px]"
                     value={editFormData.reason}
                     onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {editFormData.reason.length}/10 characters minimum
+                  </p>
                 </div>
               </div>
             </div>
@@ -727,8 +1004,9 @@ const EmployeeAttendance = () => {
               <Button
                 className="glow-button"
                 onClick={handleSubmitEditRequest}
-                disabled={!editFormData.reason || !editFormData.punchIn || !editFormData.punchOut}
+                disabled={submittingEdit || !editFormData.reason || editFormData.reason.length < 10 || !editFormData.punchIn || !editFormData.punchOut}
               >
+                {submittingEdit && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 <Send className="h-4 w-4 mr-2" />
                 Submit Request
               </Button>
