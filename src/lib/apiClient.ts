@@ -120,16 +120,64 @@ export const expenseAPI = {
   getStatistics: (params?: any) => api.get('/expenses/statistics', { params }),
 };
 
-// Chat APIs
+// Chat APIs - Complete WhatsApp-like functionality
 export const chatAPI = {
+  // Chat Rooms
+  getRooms: () => api.get('/chat/rooms'),
+  getOrCreatePersonalChat: (userId: string) => 
+    api.post('/chat/rooms/personal', { userId }),
+  getRoomMessages: (roomId: string, params?: { limit?: number; before?: string }) => 
+    api.get(`/chat/rooms/${roomId}/messages`, { params }),
+  sendRoomMessage: (roomId: string, content: string, messageType = 'text', replyTo?: string) =>
+    api.post(`/chat/rooms/${roomId}/messages`, { content, messageType, replyTo }),
+  markRoomAsRead: (roomId: string) => 
+    api.put(`/chat/rooms/${roomId}/read`),
+  
+  // Media Upload
+  uploadMedia: (roomId: string, file: File, caption?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    return api.post(`/chat/rooms/${roomId}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  
+  // Groups
+  createGroup: (name: string, members: string[], description?: string) =>
+    api.post('/chat/groups', { name, members, description }),
+  getGroupDetails: (groupId: string) => 
+    api.get(`/chat/groups/${groupId}`),
+  updateGroup: (groupId: string, data: { name?: string; description?: string }) =>
+    api.put(`/chat/groups/${groupId}`, data),
+  deleteGroup: (groupId: string) => 
+    api.delete(`/chat/groups/${groupId}`),
+  addGroupMembers: (groupId: string, memberIds: string[]) =>
+    api.post(`/chat/groups/${groupId}/members`, { memberIds }),
+  removeGroupMember: (groupId: string, memberId: string) =>
+    api.delete(`/chat/groups/${groupId}/members/${memberId}`),
+  leaveGroup: (groupId: string) => 
+    api.post(`/chat/groups/${groupId}/leave`),
+  getGroupMessages: (groupId: string, params?: { limit?: number; before?: string }) =>
+    api.get(`/chat/groups/${groupId}/messages`, { params }),
+  
+  // Users
+  getCompanyUsers: () => api.get('/chat/users'),
+  searchUsers: (query: string) => 
+    api.get('/chat/users/search', { params: { q: query } }),
+  
+  // Messages
+  deleteMessage: (messageId: string) => 
+    api.delete(`/chat/messages/${messageId}`),
+  getUnreadCount: () => api.get('/chat/unread'),
+  
+  // Legacy API (backward compatibility)
   getConversations: () => api.get('/chat/conversations'),
-  getMessages: (userId: string) => api.get(`/chat/messages/${userId}`),
-  sendMessage: (receiver: string, content: string) =>
-    api.post('/chat/send', { receiver, content }),
+  getMessages: (userId: string, params?: { limit?: number; before?: string }) => 
+    api.get(`/chat/messages/${userId}`, { params }),
+  sendMessage: (receiver: string, content: string, isGroupMessage = false, groupId?: string) =>
+    api.post('/chat/send', { receiver, content, isGroupMessage, groupId }),
   markAsRead: (userId: string) => api.put(`/chat/read/${userId}`),
-  searchUsers: (query: string) => api.get('/chat/users/search', { params: { q: query } }),
-  getUnreadCount: () => api.get('/chat/unread/count'),
-  deleteMessage: (messageId: string) => api.delete(`/chat/${messageId}`),
 };
 
 // Company APIs

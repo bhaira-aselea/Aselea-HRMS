@@ -93,14 +93,76 @@ export interface Attendance {
   };
 }
 
+// Chat Types
+export interface ChatRoom {
+  _id: string;
+  name?: string;
+  type: 'personal' | 'group';
+  participants: User[];
+  admins?: User[];
+  company: Company | string;
+  createdBy?: User | string;
+  lastMessage?: {
+    content: string;
+    sender: User | string;
+    messageType: 'text' | 'image' | 'document' | 'voice';
+    createdAt: string;
+  };
+  avatar?: {
+    url: string;
+    publicId: string;
+  };
+  description?: string;
+  isActive: boolean;
+  settings?: {
+    onlyAdminsCanMessage: boolean;
+    isMuted: boolean;
+  };
+  unreadCount?: number;
+  otherUser?: User; // For personal chats
+  memberCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Message {
   _id: string;
+  chatRoom: ChatRoom | string;
   sender: User | string;
-  receiver: User | string;
-  company: Company | string;
+  receiver?: User | string;
+  company?: Company | string;
   content: string;
-  read: boolean;
+  messageType: 'text' | 'image' | 'document' | 'voice';
+  attachment?: {
+    url: string;
+    publicId: string;
+    name: string;
+    size: number;
+    mimeType: string;
+    duration?: number; // For voice messages
+  };
+  isGroupMessage: boolean;
+  groupId?: string;
+  isRead: boolean;
+  readAt?: string;
+  readBy?: { user: User | string; readAt: string }[];
+  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  replyTo?: Message | string;
+  isDeleted: boolean;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface OnlineUser {
+  userId: string;
+  userName: string;
+  role?: string;
+}
+
+export interface TypingUser {
+  userId: string;
+  userName: string;
+  roomId: string;
 }
 
 export interface Announcement {
