@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +19,7 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
+  Image,
 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { attendanceAPI, hrAPI } from '@/lib/apiClient';
@@ -35,6 +37,7 @@ interface AttendanceRecord {
   checkIn?: {
     time?: string;
     location?: { latitude: number; longitude: number; address?: string };
+    photo?: { url: string; publicId: string; capturedAt: string };
   };
   checkOut?: {
     time?: string;
@@ -288,19 +291,20 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                     <TableHead>Punch Out</TableHead>
                     <TableHead>Total Hours</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Photo</TableHead>
                     <TableHead>Location</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading && attendanceData.length === 0 ? (
                     <TableRow key="loading">
-                      <TableCell colSpan={7} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
                       </TableCell>
                     </TableRow>
                   ) : filteredData.length === 0 ? (
                     <TableRow key="empty">
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No attendance records found
                       </TableCell>
                     </TableRow>
@@ -353,6 +357,24 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                           <TableCell>{checkOut}</TableCell>
                           <TableCell>{hours}</TableCell>
                           <TableCell>{getStatusBadge(record.status)}</TableCell>
+                          <TableCell>
+                            {record.checkIn?.photo?.url ? (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="h-8 px-2 text-primary hover:text-primary/80"
+                                onClick={() => {
+                                  const photoUrl = record.checkIn?.photo?.url;
+                                  if (photoUrl) window.open(photoUrl, '_blank');
+                                }}
+                              >
+                                <Image className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             {checkInLocation ? (
                               <a

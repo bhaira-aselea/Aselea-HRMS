@@ -94,6 +94,14 @@ const EmployeeAttendance = () => {
   // Photo preview state
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+
+  // Effect to attach stream to video when modal opens
+  useEffect(() => {
+    if (showCamera && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(console.error);
+    }
+  }, [showCamera]);
   
   useEffect(() => {
     fetchTodayAttendance();
@@ -165,16 +173,27 @@ const EmployeeAttendance = () => {
   // Camera functions
   const startCamera = async () => {
     try {
+      // First show the modal so video element is in DOM
+      setShowCamera(true);
+      
+      // Small delay to ensure video element is rendered
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: 640, height: 480 }
       });
       streamRef.current = stream;
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Ensure video plays
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(console.error);
+        };
       }
-      setShowCamera(true);
     } catch (error) {
       console.error('Camera error:', error);
+      setShowCamera(false);
       toast({
         title: 'Camera Error',
         description: 'Could not access camera. Please allow camera permissions.',
@@ -195,6 +214,17 @@ const EmployeeAttendance = () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+      
+      // Check if video is ready
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        toast({
+          title: 'Camera Loading',
+          description: 'Please wait for camera to initialize...',
+          variant: 'default',
+        });
+        return;
+      }
+      
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
