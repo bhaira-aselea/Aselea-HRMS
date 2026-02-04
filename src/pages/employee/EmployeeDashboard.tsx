@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import { employeeAPI, attendanceAPI } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 
 const EmployeeDashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [myTasks, setMyTasks] = useState<any[]>([]);
@@ -112,7 +114,9 @@ const EmployeeDashboard = () => {
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2">Good Morning, Bhaira!</h2>
+                  <h2 className="text-2xl font-bold text-foreground mb-2">
+                    Good Morning, {dashboardData?.user?.name || 'Employee'}!
+                  </h2>
                   <p className="text-muted-foreground">
                     {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                   </p>
@@ -125,21 +129,21 @@ const EmployeeDashboard = () => {
                 </div>
                 <div className="flex flex-col items-center gap-3">
                   <Button
-                    onClick={handlePunch}
+                    onClick={() => navigate('/employee/attendance')}
                     size="lg"
                     className={`glow-button h-20 w-40 text-lg font-semibold ${
-                      isPunchedIn ? 'bg-destructive hover:bg-destructive/90' : ''
+                      isPunchedIn ? 'bg-success hover:bg-success/90' : ''
                     }`}
                   >
                     {isPunchedIn ? (
                       <>
                         <Timer className="h-5 w-5 mr-2" />
-                        Punch Out
+                        Check Out
                       </>
                     ) : (
                       <>
                         <Clock className="h-5 w-5 mr-2" />
-                        Punch In
+                        Check In
                       </>
                     )}
                   </Button>
@@ -162,13 +166,13 @@ const EmployeeDashboard = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Working Hours</span>
                   <span className="text-sm font-medium text-foreground">
-                    {isPunchedIn ? '4h 32m' : '0h 0m'}
+                    {dashboardData?.attendance?.workingHours || '0h 0m'}
                   </span>
                 </div>
-                <Progress value={isPunchedIn ? 56 : 0} className="h-2" />
+                <Progress value={dashboardData?.attendance?.workProgress || 0} className="h-2" />
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>0h</span>
-                  <span>8h target</span>
+                  <span>{dashboardData?.attendance?.workTarget || 8}h target</span>
                 </div>
               </div>
             </CardContent>
@@ -194,6 +198,7 @@ const EmployeeDashboard = () => {
             title="Pending Expenses"
             value={dashboardData?.stats?.pendingExpenses || 0}
             icon={Receipt}
+            prefix="₹"
             className="stagger-3"
           />
           <StatsCard
@@ -275,19 +280,16 @@ const EmployeeDashboard = () => {
                       className="p-4 rounded-lg bg-secondary/50 border-l-4 border-primary"
                     >
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm font-medium text-foreground">{announcement.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{announcement.date}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(announcement.createdAt).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric' 
+                          })}
+                        </p>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className={
-                          announcement.priority === 'high' ? 'status-rejected' :
-                          announcement.priority === 'medium' ? 'status-pending' : 'status-approved'
-                        }
-                      >
-                        {announcement.priority}
-                      </Badge>
                     </div>
                   </div>
                 ))
@@ -297,25 +299,6 @@ const EmployeeDashboard = () => {
                     <p>No announcements yet</p>
                   </div>
                 )}
-              </div>
-
-              {/* Leave Balance Summary */}
-              <div className="mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20">
-                <h4 className="text-sm font-medium text-foreground mb-3">Leave Balance</h4>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-xl font-bold text-foreground">5</p>
-                    <p className="text-xs text-muted-foreground">Casual</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-foreground">4</p>
-                    <p className="text-xs text-muted-foreground">Sick</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-foreground">3</p>
-                    <p className="text-xs text-muted-foreground">Annual</p>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>

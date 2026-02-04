@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,11 +34,12 @@ import { hrAPI, leaveAPI, expenseAPI } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 
 const HRDashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
   const [pendingExpenses, setPendingExpenses] = useState<any[]>([]);
-  const [todayAttendance, setTodayAttendance] = useState<any[]>([]);
+  const [todayAttendance, setTodayAttendance] = useState<any>({ attendance: [], absent: [], stats: {} });
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -61,13 +63,21 @@ const HRDashboard = () => {
       setDashboardData(dashboardRes.data.data);
       setPendingLeaves(Array.isArray(leavesRes.data.data) ? leavesRes.data.data : []);
       setPendingExpenses(Array.isArray(expensesRes.data.data) ? expensesRes.data.data : []);
-      setTodayAttendance(Array.isArray(attendanceRes.data.data) ? attendanceRes.data.data : []);
+      // Handle nested attendance data structure
+      const attendanceData = attendanceRes.data.data;
+      if (attendanceData && attendanceData.attendance) {
+        setTodayAttendance(attendanceData);
+      } else if (Array.isArray(attendanceData)) {
+        setTodayAttendance({ attendance: attendanceData, absent: [], stats: {} });
+      } else {
+        setTodayAttendance({ attendance: [], absent: [], stats: {} });
+      }
     } catch (error: any) {
       console.error('Failed to fetch dashboard:', error);
       // Set empty arrays on error
       setPendingLeaves([]);
       setPendingExpenses([]);
-      setTodayAttendance([]);
+      setTodayAttendance({ attendance: [], absent: [], stats: {} });
       toast({
         title: 'Error',
         description: error.response?.data?.message || 'Failed to load dashboard',
@@ -240,19 +250,31 @@ const HRDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
-              <Button className="glow-button">
+              <Button 
+                className="glow-button"
+                onClick={() => navigate('/hr/employees')}
+              >
                 <UserPlus className="h-4 w-4 mr-2" />
                 Add Employee
               </Button>
-              <Button variant="secondary">
+              <Button 
+                variant="secondary"
+                onClick={() => navigate('/hr/tasks')}
+              >
                 <ClipboardList className="h-4 w-4 mr-2" />
                 Create Task
               </Button>
-              <Button variant="secondary">
+              <Button 
+                variant="secondary"
+                onClick={() => navigate('/hr/holidays')}
+              >
                 <CalendarCheck className="h-4 w-4 mr-2" />
                 Add Holiday
               </Button>
-              <Button variant="secondary">
+              <Button 
+                variant="secondary"
+                onClick={() => navigate('/hr/expenses')}
+              >
                 <Receipt className="h-4 w-4 mr-2" />
                 Review Expenses
               </Button>
@@ -414,37 +436,43 @@ const HRDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {todayAttendance && todayAttendance.length > 0 ? (
-                todayAttendance.map((emp) => (
-                <div
-                  key={emp.id}
-                  className="p-4 rounded-lg bg-secondary/50 border border-border"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-primary/20 text-primary text-sm">
-                        {emp.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{emp.name}</p>
-                      <Badge
-                        variant="outline"
-                        className={
-                          emp.status === 'present' ? 'status-approved' :
-                          emp.status === 'late' ? 'status-pending' : 'status-rejected'
-                        }
-                      >
-                        {emp.status}
-                      </Badge>
+              {todayAttendance?.attendance && todayAttendance.attendance.length > 0 ? (
+                todayAttendance.attendance.map((record: any) => {
+                  const userName = record.user?.name || 'Unknown';
+                  const checkInTime = record.checkIn ? new Date(record.checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                  const checkOutTime = record.checkOut ? new Date(record.checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                  
+                  return (
+                  <div
+                    key={record._id}
+                    className="p-4 rounded-lg bg-secondary/50 border border-border"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                          {userName.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{userName}</p>
+                        <Badge
+                          variant="outline"
+                          className={
+                            record.status === 'present' ? 'status-approved' :
+                            record.status === 'late' ? 'status-pending' : 'status-rejected'
+                          }
+                        >
+                          {record.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>In: {checkInTime}</span>
+                      <span>Out: {checkOutTime}</span>
                     </div>
                   </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>In: {emp.punchIn}</span>
-                    <span>Out: {emp.punchOut}</span>
-                  </div>
-                </div>
-              ))
+                  );
+                })
               ) : (
                 <div className="col-span-full text-center py-8 text-muted-foreground">
                   No attendance records for today
@@ -456,19 +484,19 @@ const HRDashboard = () => {
             <div className="mt-6 p-4 rounded-lg bg-secondary/30 border border-border">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div>
-                  <p className="text-2xl font-bold text-success">72</p>
+                  <p className="text-2xl font-bold text-success">{todayAttendance?.stats?.present || 0}</p>
                   <p className="text-xs text-muted-foreground">Present</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-warning">5</p>
+                  <p className="text-2xl font-bold text-warning">{todayAttendance?.stats?.late || 0}</p>
                   <p className="text-xs text-muted-foreground">Late</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-destructive">4</p>
+                  <p className="text-2xl font-bold text-destructive">{todayAttendance?.stats?.absent || 0}</p>
                   <p className="text-xs text-muted-foreground">Absent</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-primary">5</p>
+                  <p className="text-2xl font-bold text-primary">{todayAttendance?.stats?.onLeave || 0}</p>
                   <p className="text-xs text-muted-foreground">On Leave</p>
                 </div>
               </div>
