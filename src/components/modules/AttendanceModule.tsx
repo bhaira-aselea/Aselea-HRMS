@@ -31,6 +31,7 @@ interface AttendanceRecord {
     _id: string;
     name: string;
     employeeId?: string;
+    role?: string;
   };
   employeeName?: string;
   date: string;
@@ -73,6 +74,7 @@ const getStatusBadge = (status: string) => {
 const AttendanceModule = ({ role }: AttendanceModuleProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all'); // For admin to filter employee/HR
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [todayStatus, setTodayStatus] = useState<any>(null);
   const { loading, execute } = useApi();
@@ -170,7 +172,8 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
     const employeeName = record.user?.name || record.employeeName || '';
     const matchesSearch = employeeName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesRole = roleFilter === 'all' || record.user?.role === roleFilter;
+    return matchesSearch && matchesStatus && matchesRole;
   });
 
   const stats = {
@@ -273,6 +276,19 @@ const AttendanceModule = ({ role }: AttendanceModuleProps) => {
                     <SelectItem value="half-day">Half Day</SelectItem>
                   </SelectContent>
                 </Select>
+                {role === 'admin' && (
+                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+                    <SelectTrigger className="w-[130px] bg-secondary border-border">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      <SelectItem value="employee">Employees</SelectItem>
+                      <SelectItem value="hr">HR Managers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
                 <Button variant="secondary">
                   <Download className="h-4 w-4 mr-2" />
                   Export

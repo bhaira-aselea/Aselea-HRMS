@@ -20,6 +20,7 @@ import HREmployees from "./pages/hr/HREmployees";
 import HRProfile from "./pages/hr/HRProfile";
 import HRTasks from "./pages/hr/HRTasks";
 import HRAttendanceRequests from "./pages/hr/HRAttendanceRequests";
+import HRAttendance from "./pages/hr/HRAttendance";
 import EmployeeDetail from "./pages/hr/EmployeeDetail";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 import EmployeeProfile from "./pages/employee/EmployeeProfile";
@@ -71,6 +72,7 @@ const App = () => (
             <Route path="/hr/employees" element={<ProtectedRoute allowedRole="hr"><HREmployees /></ProtectedRoute>} />
             <Route path="/hr/employees/:employeeId" element={<ProtectedRoute allowedRole="hr"><EmployeeDetail /></ProtectedRoute>} />
             <Route path="/hr/chat" element={<ProtectedRoute allowedRole="hr"><ChatModule role="hr" /></ProtectedRoute>} />
+            <Route path="/hr/my-attendance" element={<ProtectedRoute allowedRole="hr"><HRAttendance /></ProtectedRoute>} />
             <Route path="/hr/attendance" element={<ProtectedRoute allowedRole="hr"><AttendanceModule role="hr" /></ProtectedRoute>} />
             <Route path="/hr/attendance-requests" element={<ProtectedRoute allowedRole="hr"><HRAttendanceRequests /></ProtectedRoute>} />
             <Route path="/hr/leaves" element={<ProtectedRoute allowedRole="hr"><LeaveModule role="hr" /></ProtectedRoute>} />

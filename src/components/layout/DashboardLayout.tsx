@@ -60,6 +60,7 @@ const hrNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/hr', icon: LayoutDashboard },
   { title: 'My Profile', href: '/hr/profile', icon: User },
   { title: 'Employees', href: '/hr/employees', icon: UserCircle },
+  { title: 'My Attendance', href: '/hr/my-attendance', icon: Clock },
   { title: 'Attendance', href: '/hr/attendance', icon: Clock },
   { title: 'Edit Requests', href: '/hr/attendance-requests', icon: FileEdit },
   { title: 'Leave Requests', href: '/hr/leaves', icon: CalendarCheck },
