@@ -54,7 +54,10 @@ interface Employee {
   joinDate?: string;
   address?: string;
   status: 'active' | 'inactive' | 'on-leave';
-  profilePhoto?: string;
+  profilePhoto?: {
+    url: string;
+    publicId: string;
+  } | string;
   company?: any;
 }
 
@@ -363,7 +366,10 @@ const EmployeeDetail = () => {
               <CardContent className="p-6">
                 <div className="flex flex-col items-center">
                   <Avatar className="h-32 w-32 mb-4 ring-4 ring-primary/20">
-                    <AvatarImage src={employee.profilePhoto} alt={employee.name} />
+                    <AvatarImage 
+                      src={typeof employee.profilePhoto === 'string' ? employee.profilePhoto : employee.profilePhoto?.url} 
+                      alt={employee.name} 
+                    />
                     <AvatarFallback className="text-3xl bg-primary/20 text-primary">
                       {employee.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>

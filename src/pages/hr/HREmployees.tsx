@@ -41,7 +41,7 @@ interface Employee {
   employeeId: string;
   dateOfBirth?: string;
   address?: string;
-  profilePhoto?: string;
+  profilePhoto?: {url: string; publicId: string} | string;
 }
 
 const HREmployees = () => {
@@ -506,6 +506,7 @@ const HREmployees = () => {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar>
+                            <AvatarImage src={typeof employee.profilePhoto === 'string' ? employee.profilePhoto : employee.profilePhoto?.url} />
                             <AvatarFallback className="bg-primary/20 text-primary">
                               {employee.name.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>

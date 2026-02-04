@@ -40,7 +40,7 @@ const EmployeeProfile = () => {
     employeeId: '',
     department: '',
     position: '',
-    profilePhoto: '',
+    profilePhoto: '' as {url: string; publicId: string} | string,
     status: 'active',
   });
 
@@ -63,7 +63,7 @@ const EmployeeProfile = () => {
         employeeId: data.employeeId || '',
         department: data.department || '',
         position: data.position || '',
-        profilePhoto: data.profilePhoto || '',
+        profilePhoto: (typeof data.profilePhoto === 'string' ? data.profilePhoto : data.profilePhoto?.url) || '',
         status: data.status || 'active',
       });
     } catch (error: any) {
