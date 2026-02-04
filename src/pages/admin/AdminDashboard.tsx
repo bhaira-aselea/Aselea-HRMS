@@ -73,6 +73,7 @@ const AdminDashboard = () => {
   }
 
   const stats = dashboardData?.stats || {};
+  const systemHealth = dashboardData?.systemHealth || {};
   const alerts = dashboardData?.alerts || [];
 
   return (
@@ -84,21 +85,18 @@ const AdminDashboard = () => {
             title="Total Companies"
             value={stats.totalCompanies || 0}
             icon={Building2}
-            trend={{ value: stats.companiesGrowth || 0, isPositive: (stats.companiesGrowth || 0) >= 0 }}
             className="stagger-1"
           />
           <StatsCard
             title="HR Managers"
             value={stats.totalHR || 0}
             icon={Users}
-            trend={{ value: stats.hrGrowth || 0, isPositive: (stats.hrGrowth || 0) >= 0 }}
             className="stagger-2"
           />
           <StatsCard
             title="Total Employees"
             value={stats.totalEmployees || 0}
             icon={UserCircle}
-            trend={{ value: stats.employeesGrowth || 0, isPositive: (stats.employeesGrowth || 0) >= 0 }}
             className="stagger-3"
           />
           <StatsCard
@@ -128,7 +126,7 @@ const AdminDashboard = () => {
             title="Pending Expenses"
             value={stats.pendingExpenses || 0}
             icon={Receipt}
-            prefix="$"
+            prefix="₹"
             className="stagger-6"
           />
         </div>
@@ -215,23 +213,23 @@ const AdminDashboard = () => {
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-muted-foreground">Server Load</span>
-                      <span className="text-foreground">45%</span>
+                      <span className="text-foreground">{systemHealth.serverLoad || 0}%</span>
                     </div>
-                    <Progress value={45} className="h-2" />
+                    <Progress value={systemHealth.serverLoad || 0} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-muted-foreground">Database</span>
-                      <span className="text-foreground">72%</span>
+                      <span className="text-foreground">{systemHealth.database || 0}%</span>
                     </div>
-                    <Progress value={72} className="h-2" />
+                    <Progress value={systemHealth.database || 0} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-muted-foreground">Storage</span>
-                      <span className="text-foreground">38%</span>
+                      <span className="text-foreground">{systemHealth.storage || 0}%</span>
                     </div>
-                    <Progress value={38} className="h-2" />
+                    <Progress value={systemHealth.storage || 0} className="h-2" />
                   </div>
                 </div>
               </div>

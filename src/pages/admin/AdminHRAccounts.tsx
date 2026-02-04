@@ -106,10 +106,9 @@ const AdminHRAccounts = () => {
         role: 'hr',
       };
       
-      // Remove reportingTo if empty
-      if (!dataToSend.reportingTo) {
-        delete dataToSend.reportingTo;
-      }
+      // Remove reportingTo - it should not be sent for HR creation
+      // (HR users don't have a reportingTo field in the User model for HR role)
+      delete dataToSend.reportingTo;
       
       // Remove company if empty (backend will handle default or make it optional)
       if (!dataToSend.company) {
@@ -468,18 +467,6 @@ const AdminHRAccounts = () => {
                       onChange={(e) => setFormData({ ...formData, joinedDate: e.target.value })}
                     />
                   </div>
-                </div>
-
-                {/* Reporting To */}
-                <div className="space-y-2">
-                  <Label htmlFor="reportingTo">Reporting To (Optional)</Label>
-                  <Input
-                    id="reportingTo"
-                    placeholder="e.g., Senior HR Manager"
-                    className="bg-secondary border-border"
-                    value={formData.reportingTo}
-                    onChange={(e) => setFormData({ ...formData, reportingTo: e.target.value })}
-                  />
                 </div>
               </div>
               <div className="flex justify-end gap-3">
